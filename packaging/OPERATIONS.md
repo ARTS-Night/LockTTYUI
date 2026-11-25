@@ -1,56 +1,124 @@
-# Operations — experimental preview, not production login integration
+# LockTTYUI operations — AlmaLinux 9 (TTY1 only)
 
-RPM install is passive. No PAM, SSH, getty drop-ins, SELinux settings or persistent users are modified. The preview unit has no Install section and no automatic getty restart trigger.
+## Automatic integration on RPM installation
 
-Only test on a disposable AlmaLinux VM with SSH and a separate console already available. Never target tty1, a logged-in console or a remote serial console. The examples use tty9 exclusively; first verify it is unused with loginctl and systemctl. The fixed preview unit does not stop getty automatically. After verifying tty9 is unused, stop its getty explicitly from SSH.
+The RPM ships a vendor-level, **instance-specific** drop-in at
+`/usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf`.
+There is **no** modification of `getty@.service`, `getty@tty2.service` or higher terminals,
+PAM, SSH, login policy, or `/etc/systemd`.
 
-After installing the locally built RPM:
+- Install with `sudo dnf install ./lockttyui-*.rpm` (review and verify the RPM first).
+- RPM reloads systemd's unit definitions, **but never restarts a running getty or user session**.
+- On the next normal **getty@tty1.service** start (typically the next boot), the tty1
+  bridge starts an unprivileged telemetry child and displays LockTTYUI.
+- Press **Ctrl+]** on tty1 to leave the dashboard and run the distro's normal `agetty`
+  login. Enter a username/password using the normal login and PAM mechanisms.
+- After the user logs out, the existing systemd getty restart policy runs the
+  dashboard again. TTY2+ remain the distro's unmodified login consoles; SSH remains
+  unchanged. Use Ctrl+Alt+F2 to reach tty2 at the physical console.
+
+The tty1 bridge itself runs under the privileged getty service solely to hand off
+to `/usr/sbin/agetty`. The dashboard subprocess runs as UID/GID 65534 with no
+supplementary groups, using inherited tty file descriptors. This is not auto-login:
+the dashboard never requests or handles a password. If the display exits with an
+error, fails to launch, or is killed, the bridge falls back to ordinary agetty.
+A stop signal from systemd shuts the child down without unexpectedly launching login.
+
+The override is suitable for the **text-only virtual-console** environment used
+for this project. Graphical login managers, custom tty1 getty overrides, SELinux
+policy, virtual terminal behavior, and local fonts must be reviewed before use
+outside a disposable AlmaLinux test VM. The package does not forcibly switch
+`graphical.target` to `multi-user.target` or seize an active console.
+
+## Verify in a disposable VM before deploying
+
+Keep SSH and a separate working TTY2 login available. Do not try the following
+on an actively used console. Before reboot, inspect without changing the session:
+
+    systemctl cat getty@tty1.service
+    systemctl cat getty@tty2.service
+    systemd-analyze verify getty@tty1.service
+    systemctl get-default
+
+The tty1 override must appear only in the first output; the second must still
+use the stock getty template. On a test VM, after logging out of tty1, restart
+the service **from SSH or tty2** to test immediately:
+
+    sudo systemctl restart getty@tty1.service
+
+Validation checklist:
+1. tty1 displays LockTTYUI; tty2 can log in without it.
+2. Ctrl+] shows the normal agetty username/password prompt; no automatic login.
+3. After a normal user login and logout on tty1, dashboard returns.
+4. Killing only the unprivileged display child lets the bridge show agetty.
+5. `systemctl stop getty@tty1.service` does not start a second agetty.
+6. A system reboot returns tty1 dashboard and preserves tty2/SSH access.
+7. SELinux enforcing, CPU/GPU visibility, resize, keyboard flush and failure
+   conditions are checked on the actual console.
+
+None of these physical-console conditions is proven by a Docker CI build alone.
+
+## Revert / uninstall
+
+The RPM owns its drop-in under `/usr/lib`, not a file under `/etc`. On final
+removal, that file is removed and systemd is reloaded; the distributor's normal
+tty1 getty definition is restored for its **next** start. No other gettys change.
+
+    sudo dnf remove lockttyui
+    systemctl cat getty@tty1.service
+
+If immediate restoration is needed, from **SSH or tty2** (never during an active
+tty1 login), restart the existing getty:
+
+    sudo systemctl restart getty@tty1.service
+
+After removal, test standard login on tty1 and tty2. If a machine already has
+custom tty1 settings, the package cannot safely override or delete them; review
+the unit effective configuration first.
+
+## Manual tty9 preview (developer-only)
+
+The separate `lockttyui-preview.service` remains disabled and is never enabled
+or started by the RPM. It is for manual experiments on a known-free tty9:
 
     sudo systemctl stop getty@tty9.service
     sudo systemctl start lockttyui-preview.service
 
-Exit with Ctrl+] or stop from SSH. Restore explicitly:
+Restore after stopping the preview:
 
     sudo systemctl stop lockttyui-preview.service
     sudo systemctl start getty@tty9.service
 
-The package registers only the fixed tty9 preview unit. RPM scriptlets reload systemd metadata and stop the preview on final removal; no automatic enable or restart is requested. Before removal, stop the preview and restore getty manually. An older experimental template must be stopped manually before upgrading.
+The preview is intentionally not a login manager. Under `PrivateNetwork`,
+network telemetry may be unavailable.
 
-No automatic pre-login cycle is installed. Do not enable this preview as a login replacement. Under PrivateNetwork network rates can be N/A; do not remove isolation merely to obtain network statistics.
+## Local RPM build
 
-## Production gates
-- Confirm correct SELinux context and review dedicated policy if required.
-- Confirm TTY handoff, input flushing and no residual credentials.
-- Verify normal login/logout with unmodified getty/PAM, crash, SIGKILL, boot, manual stop and rollback.
-- Verify no privilege escalation or private information on screen.
-- Test physical font support, CPU overhead and disk / GPU visibility.
-- Only after these tests design a deterministic automatic supervisor; no success/failure trigger loops.
-
-## RPM local build
-Requires Go 1.23+, rpm-build, systemd RPM macros and a Linux build host. From repository root:
+Go 1.23+, `rpm-build`, and `systemd-rpm-macros` are required only on the build
+host. From the repository root:
 
     mkdir -p ~/rpmbuild/{SOURCES,SPECS}
     git archive --format=tar.gz --prefix=lockttyui-0.6.0/ HEAD > ~/rpmbuild/SOURCES/lockttyui-0.6.0.tar.gz
     cp packaging/lockttyui.spec ~/rpmbuild/SPECS/
-    rpmbuild -ba ~/rpmbuild/SPECS/lockttyui.spec
+    rpmbuild -bb ~/rpmbuild/SPECS/lockttyui.spec
 
-Inspect RPM contents before installing with dnf install /absolute/path/to/package.rpm. Stop preview and restore getty before dnf remove lockttyui. License field is provisional for private development; review before publishing.
+Review RPM contents and dependencies before installing. The binary is built
+with CGO disabled; no third-party Go modules are required. Docker,
+NVIDIA utilities, and individual monitored system services are optional.
 
-## Standalone installation
-Install the RPM matching the machine architecture with `sudo dnf install ./lockttyui-0.6.0-1.el9.x86_64.rpm` (use the actual filename).
-Run `lockttyui --exhibit` as an ordinary user. Go is needed only on the build host.
-Docker, NVIDIA utilities and individual monitored services are optional. Systemd is recommended for service status; a failed query is not a healthy result.
-The build disables CGO and external Go module resolution. Verify the resulting ELF has no interpreter or NEEDED entries before release.
-A local RPM is not a hosted DNF repository. Public DNF repository hosting and upgrade tests remain release gates.
+## GitHub Actions releases
 
-## GitHub build releases
-Only pushes to the build branch run CI. After successful tests and static ELF checks, CI creates an unsigned prerelease with the RPM and SHA256SUMS. Download both from the same release, then run:
+Only a push to the `build` branch triggers the RPM workflow. It builds inside
+AlmaLinux 9, runs Go tests/vet, tests RPM installation and removal, checks
+static ELF dependencies, and publishes unsigned prereleases with SHA256SUMS
+only after those checks pass.
+
+Download both from the same release and run:
 
     sha256sum -c SHA256SUMS
     sudo dnf install ./lockttyui-*.rpm
 
-If local RPM signature policy rejects this unsigned package, review the source and release provenance first; only then optionally use `sudo dnf --nogpgcheck install ./lockttyui-*.rpm` for this transaction. Never change global signature policy. A checksum downloaded with the RPM detects corruption but does not authenticate the publisher. Private repository access remains required while the repository is private.
-
-## Automatic RPM setup and login safety
-The RPM automatically installs the binary and the fixed tty9 preview unit, and registers it with systemd through RPM macros. It does not replace getty, PAM, SSH, or an active login terminal. Automatic login-screen takeover is intentionally gated until physical-console, crash, input-flush, SELinux, and uninstall rollback tests pass. Installing a package must not silently strand the machine without a working login.
-The `build` branch is the only CI trigger. Each successful build creates an unsigned prerelease; the workflow does not publish a DNF repository or install packages on the target machine.
+A matching checksum does not authenticate an unsigned publisher. Inspect the
+source and provenance; if a verified local RPM requires a one-off exception,
+use `sudo dnf --nogpgcheck install ./lockttyui-*.rpm` only after review. Do not
+change global signature policy. There is not yet a hosted DNF repository.
