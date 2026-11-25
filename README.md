@@ -15,14 +15,14 @@ CPU, memory, swap, local storage, disk I/O, network, and optional hardware stati
 
 ## Safety
 
-Standalone exhibit mode is not a session lock. It returns to the invoking shell. No PAM or SSH changes, no root requirement, no Docker socket, no identity/address disclosure. Physical console glyphs and SELinux confinement still require validation.
+Standalone exhibit mode is not a session lock. It returns to the invoking shell. The RPM provides a **TTY1-only** pre-login dashboard: Ctrl+] hands off to the normal agetty login, and the dashboard returns after logout. TTY2+ and SSH use unmodified standard login. No PAM changes, no Docker socket, no identity/address disclosure. The dashboard child uses an unprivileged UID; physical console behavior and SELinux confinement require VM validation.
 
-See packaging/OPERATIONS.md for passive RPM build and isolated tty9 preview. Do not use the preview as a production login replacement; it does not automatically hand off or restore getty. PrivateNetwork can make network rates unavailable.
+See packaging/OPERATIONS.md for automatic TTY1 integration, install/uninstall rollback, exact VM test steps and manual isolated tty9 preview. The preview is not a login replacement. PrivateNetwork can make preview network rates unavailable.
 
 ## Status
 
-Development branch: responsive bar dashboard and preview packaging. Build, tests, RPM generation, physical console validation and production authentication integration must be verified before release.
+Development branch: responsive bar dashboard and TTY1 getty handoff integration. CI build, RPM install/removal, physical console behavior and SELinux protection must be verified before production deployment.
 
 ## Resource bounds
 
-Three single-entry graph caches, 60 samples per series and six events; caches are replaced on history changes and terminal resize. Hardware collection has one in-flight worker. No persistent monitoring database, cron job, or background service is installed by default. The RPM contains a fixed tty9 preview service only; see operations for manual activation and rollback. The service's memory and task limits are provisional and need measurement on real hardware.
+Three single-entry graph caches, 60 samples per series and six events; caches are replaced on history changes and terminal resize. Hardware collection has one in-flight worker. No persistent monitoring database or cron job is installed. The RPM installs a TTY1-only getty drop-in and a disabled tty9 preview unit; it never restarts an active session during package installation. The preview service's memory and task limits are provisional and need measurement on real hardware.
