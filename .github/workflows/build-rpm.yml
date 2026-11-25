@@ -1,0 +1,60 @@
+name: RPM build
+on:
+  push:
+    branches: [build]
+permissions:
+  contents: read
+concurrency:
+  group: lockttyui-build
+  cancel-in-progress: true
+jobs:
+  rpm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build RPM on AlmaLinux 9
+        run: |
+          mkdir -p dist
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/dist:/out" almalinux:9 bash -euxc '
+            dnf -y install golang rpm-build systemd-rpm-macros binutils git
+            export HOME=/root
+            mkdir -p /root/rpmbuild/{SOURCES,SPECS}
+            version=$(awk "/^Version:/{print \$2}" /src/packaging/lockttyui.spec)
+            cp /src/packaging/lockttyui.spec /root/rpmbuild/SPECS/
+            git -c safe.directory=/src -C /src archive --format=tar.gz --prefix="lockttyui-$version/" HEAD > "/root/rpmbuild/SOURCES/lockttyui-$version.tar.gz"
+            rpmbuild -bb /root/rpmbuild/SPECS/lockttyui.spec
+            find /root/rpmbuild/RPMS -name "lockttyui-*.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" -exec cp {} /out/ \;
+          '
+      - name: Clean DNF install and removal test
+        run: |
+          docker run --rm -v "$PWD/dist:/packages:ro" almalinux:9 bash -euxc '
+            dnf -y --setopt=install_weak_deps=False install /packages/lockttyui-*.rpm
+            rpm -q lockttyui
+            rpm -qR lockttyui
+            ! rpm -q golang
+            /usr/bin/lockttyui --glyph-test
+            dnf -y remove lockttyui
+            test ! -e /usr/bin/lockttyui
+          '
+      - name: Verify static ELF and checksums
+        run: |
+          docker run --rm -v "$PWD/dist:/packages:ro" almalinux:9 bash -euxc '
+            dnf -y install binutils cpio
+            mkdir /tmp/check
+            cd /tmp/check
+            rpm2cpio /packages/lockttyui-*.rpm | cpio -id
+            readelf -h usr/bin/lockttyui
+            ! readelf -l usr/bin/lockttyui | grep -q INTERP
+            ! readelf -d usr/bin/lockttyui | grep -q NEEDED
+          '
+          cd dist
+          sha256sum *.rpm > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lockttyui-el9-x86_64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
