@@ -33,7 +33,7 @@ func barRows(h []float64,w,rows int,scale float64,invert,ascii bool,color string
    }else{out[y].WriteByte(' ')}
   }
  }
- lines:=make([]string,rows);for i:=range out{lines[i]=out[i].String()}
+ lines:=make([]string,rows);for i:=range out{lines[i]=compressGraphLine(out[i].String())}
  return lines
 }
 func barHistory(b *strings.Builder,name string,h []float64,w,rows int,ascii bool,period time.Duration,live float64,color string){
@@ -70,9 +70,13 @@ func meter(v float64,w int,color string)string{
  n:=max(0,min(w,int(math.Round(v/100*float64(w)))))
  return "\x1b[4"+color+"m"+strings.Repeat(" ",n)+"\x1b[0;37m"+strings.Repeat(".",w-n)+"\x1b[0m"
 }
-func coreMeterLines(cores map[int]*coreSeries,width,budget int)[]string{
+func coreMeterLines(cores map[int]*coreSeries,width,budget int,caches ...*dashboardCache)[]string{
  if budget<=0||len(cores)==0{return nil}
- ids:=make([]int,0,len(cores));for id:=range cores{ids=append(ids,id)};sort.Ints(ids)
+ var ids []int
+ if len(caches)>0&&caches[0]!=nil{ids=caches[0].ids}
+ valid:=len(ids)==len(cores)
+ if valid{for _,id:=range ids{if _,ok:=cores[id];!ok{valid=false;break}}}
+ if !valid{ids=make([]int,0,len(cores));for id:=range cores{ids=append(ids,id)};sort.Ints(ids);if len(caches)>0&&caches[0]!=nil{caches[0].ids=ids}}
  cols:=max(1,width/22);cell:=width/cols
  limit:=min(len(ids),cols*budget)
  if limit<len(ids){limit=max(0,limit-cols)}
@@ -147,7 +151,7 @@ func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
    out[y].WriteString(cells[idx])
   }
  }
- lines:=make([]string,rows);for i:=range out{lines[i]=out[i].String()};return lines
+ lines:=make([]string,rows);for i:=range out{lines[i]=compressGraphLine(out[i].String())};return lines
 }
 func stackedMemoryHistory(b *strings.Builder,ram,swap []float64,w,rows int,ascii bool,period time.Duration,hw hardwareInfo){
  value:=percentText(combinedMemoryPercent(hw))
