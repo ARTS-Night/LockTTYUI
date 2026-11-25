@@ -141,7 +141,9 @@ func trafficScale(rx,tx []float64) float64 {
  }
  return scale
 }
-func trafficGraph(b *strings.Builder,rx,tx []float64,w,rows int,ascii bool,period time.Duration) {
+func trafficGraph(b *strings.Builder,rx,tx []float64,w,rows int,ascii bool,period time.Duration,labels ...string) {
+ first,second:="RX","TX"
+ if len(labels)==2{first,second=labels[0],labels[1]}
  scale:=trafficScale(rx,tx)
  normalize:=func(h []float64)[]float64{
   out:=make([]float64,len(h))
@@ -167,5 +169,5 @@ func trafficGraph(b *strings.Builder,rx,tx []float64,w,rows int,ascii bool,perio
   b.WriteString("\r\n")
  }
  fmt.Fprintf(b,"\x1b[0;37m         %s%s\r\n",corner,strings.Repeat(horizontal,w))
- fmt.Fprintf(b,"          -%gs  \x1b[1;36mRX\x1b[1;34m TX\x1b[0m  + overlap  NOW\r\n",float64(len(rx))*period.Seconds())
+ fmt.Fprintf(b,"          -%gs  \x1b[1;36m%s\x1b[1;34m %s\x1b[0m  + overlap  NOW\r\n",float64(len(rx))*period.Seconds(),first,second)
 }
