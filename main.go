@@ -80,7 +80,8 @@ func run()error{
  ch,mh:=make([]float64,60),make([]float64,60)
  sh:=make([]float64,60)
  for i:=range ch{ch[i]=-1;mh[i]=-1;sh[i]=-1}
- prev,corePrev,prevOK:=readCPUSnapshot(make(map[int]cpu))
+ var procScratch [65536]byte
+ prev,corePrev,prevOK:=readCPUBuffer(procScratch[:],make(map[int]cpu))
  coreScratch:=make(map[int]cpu)
  if !prevOK{clear(corePrev)}
  cores:=map[int]*coreSeries{}
@@ -98,7 +99,7 @@ func run()error{
  var lastRenderKey struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}
  var revision uint64
  cache:=dashboardCache{}
- netPrev,netErr:=readTraffic(make(map[string]traffic))
+ netPrev,netErr:=readTrafficBuffer(procScratch[:],make(map[string]traffic))
  netScratch:=make(map[string]traffic)
  if netErr!=nil{clear(netPrev)}
  netTime:=next
@@ -149,7 +150,7 @@ func run()error{
   if !now.Before(nextSample){
    nextSample=nextSample.Add(*sample)
    if !nextSample.After(now){nextSample=now.Add(*sample)}
-   cur,coreNext,curOK:=readCPUSnapshot(coreScratch)
+   cur,coreNext,curOK:=readCPUBuffer(procScratch[:],coreScratch)
    if !curOK{clear(coreNext)}
    v=-1.0
    if prevOK&&curOK{v=cpuUsage(prev,cur)}
@@ -171,7 +172,7 @@ func run()error{
     buckets[1].add(100*float64(hw.ram.used)/total)
     buckets[4].add(100*float64(hw.swapCapacity.used)/total)
    }
-   netCur,ne:=readTraffic(netScratch)
+   netCur,ne:=readTrafficBuffer(procScratch[:],netScratch)
    rx,tx=-1,-1
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
    if ne!=nil{clear(netCur)}
