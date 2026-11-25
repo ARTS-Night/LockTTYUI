@@ -1,0 +1,12 @@
+[Unit]
+Description=Start normal tty1 getty after LockTTYUI exits
+After=lockttyui-tty1.service
+StartLimitIntervalSec=20s
+StartLimitBurst=10
+
+[Service]
+Type=oneshot
+# The /run token is root-owned and disappears on reboot.
+ExecStart=/usr/bin/touch /run/lockttyui-tty1-login.ready
+# --no-block avoids waiting for getty startup within the handoff job.
+ExecStartPost=/usr/bin/systemctl --no-block start getty@tty1.service
