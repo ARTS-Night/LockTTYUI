@@ -15,3 +15,14 @@ func TestServiceStatus(t *testing.T){
  }
  if len(statusLines(nil,"",60,true))!=0{t.Fatal("empty panel")}
 }
+
+func TestFailedCount(t *testing.T){
+ for _,v:=range []string{"","N/A","-1","2\n3"}{if _,ok:=parseFailedCount(v);ok{t.Fatal(v)}}
+ if n,ok:=parseFailedCount(" 3\n");!ok||n!=3{t.Fatal(n,ok)}
+ for _,v:=range []struct{hw hardwareInfo;want string}{
+ {hardwareInfo{},"N/A"},
+ {hardwareInfo{checking:true,failedKnown:true},"CHECKING"},
+ {hardwareInfo{failedKnown:true},"00 ERR"},
+ {hardwareInfo{failedKnown:true,failedUnits:3},"03 ERR"},
+ }{if !strings.Contains(systemIndicator(v.hw,true),v.want){t.Fatal(v)}}
+}
