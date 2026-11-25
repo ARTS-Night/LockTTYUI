@@ -22,7 +22,6 @@ func TestTrafficRate(t *testing.T) {
  if _,_,ok:=trafficRate(prev,nil,time.Second);ok{t.Fatal("empty interfaces")}
 }
 func TestStorageLabels(t *testing.T) {
- var b strings.Builder
- storageLines(&b,[]volume{{"ROOT",capacity{100,50,40}}},80,1,true)
- if !strings.Contains(b.String(),"50.0%")||!strings.Contains(b.String(),"FREE 40.0B"){t.Fatal(b.String())}
+ got:=strings.Join(storagePanel([]volume{{"ROOT",capacity{100,50,40}}},80,1,true),"\n")
+ if !strings.Contains(got,"50.0%")||!strings.Contains(got,"FREE 40.0B"){t.Fatal(got)}
 }
