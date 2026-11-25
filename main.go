@@ -101,10 +101,12 @@ func plot(h []float64,w,rows int,ascii bool)[][]rune{
  return g
 }
 func graph(b *strings.Builder,name string,h []float64,w,rows int,ascii bool,period time.Duration){
+ color:="36"
+ if strings.HasPrefix(name,"MEMORY"){color="34"}
  v:=h[len(h)-1]
  value:="N/A"
  if v>=0{value=fmt.Sprintf("%.1f%%",v)}
- fmt.Fprintf(b,"\x1b[1;36m%s\x1b[0m  %s\r\n",name,value)
+ fmt.Fprintf(b,"\x1b[1;%sm// %s\x1b[0m  %s\r\n",color,name,value)
  if w<1||rows<2{return}
  axis,corner,horizontal:="│","└","─"
  if ascii{axis,corner,horizontal="|","+","-"}
@@ -112,7 +114,7 @@ func graph(b *strings.Builder,name string,h []float64,w,rows int,ascii bool,peri
  for y,row:=range g{
   label:="   "
   if y==0||y==rows-1||y==(rows-1)/2{label=fmt.Sprintf("%3d",int(math.Round(float64(rows-1-y)*100/float64(rows-1))))}
-  fmt.Fprintf(b,"\x1b[0;37m%s %s\x1b[36m%s\r\n",label,axis,string(row))
+  fmt.Fprintf(b,"\x1b[0;37m%s %s\x1b[1;%sm%s\r\n",label,axis,color,string(row))
  }
  fmt.Fprintf(b,"\x1b[0;37m    %s%s\r\n",corner,strings.Repeat(horizontal,w))
  left:=fmt.Sprintf("-%gs",float64(len(h))*period.Seconds())
@@ -125,7 +127,7 @@ func run()error{
  interval:=flag.Duration("interval",100*time.Millisecond,"display refresh interval (100ms to 5s)")
  sample:=flag.Duration("sample",500*time.Millisecond,"metric sample interval (100ms to 1s)")
  flag.Parse()
- if *glyphTest{fmt.Println("ASCII: + - | *\nUnicode: ─ │ ┌ ┐ └ ┘\nOptional (not used): ▁ ▂ ▃ ▄ ▅ ▆ ▇ █ ⣿");return nil}
+ if *glyphTest{fmt.Println("ASCII: + - | *\nUnicode: ─ │ ┌ ┐ └ ┘ ├ ┤\nOptional (not used): ▁ ▂ ▃ ▄ ▅ ▆ ▇ █ ⣿");return nil}
  if *interval<100*time.Millisecond||*interval>5*time.Second||*sample<100*time.Millisecond||*sample>time.Second{return fmt.Errorf("interval must be 100ms..5s; sample must be 100ms..1s")}
  tty,e:=os.OpenFile("/dev/tty",os.O_RDWR,0)
  if e!=nil{return e}
@@ -180,11 +182,14 @@ func run()error{
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
    w:=int(ws.Col)-7
    if w>110{w=110}
-   rows:=(int(ws.Row)-14)/2
+   clock:=clockLines(now,int(ws.Col)-1,int(ws.Row),*ascii)
+   rows:=(int(ws.Row)-14-(len(clock)-1))/2
    if rows>16{rows=16}
    var b strings.Builder
    b.WriteString("\x1b[H\x1b[36m")
-   fmt.Fprintf(&b,"SYSTEM // MONITOR\r\n%s\r\n%s\r\n\r\n",now.Format("15:04:05"),now.Format("2006-01-02 Mon"))
+   fmt.Fprintf(&b,"LOCKTTYUI // STANDBY\r\n")
+   for _,line:=range clock{fmt.Fprintf(&b,"\x1b[1;36m%s\x1b[0m\r\n",line)}
+   fmt.Fprintf(&b,"\x1b[37m%s\r\n\r\n",now.Format("2006-01-02 Mon"))
    if w>=20&&rows>=2{
     graph(&b,"CPU / UTILIZATION",ch,w,rows,*ascii,*sample)
     b.WriteString("\r\n")
