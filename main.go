@@ -65,6 +65,12 @@ func run()error{
  sig:=make(chan os.Signal,1)
  signal.Notify(sig,syscall.SIGINT,syscall.SIGTERM,syscall.SIGHUP,syscall.SIGQUIT)
  defer signal.Stop(sig)
+ resizeSig:=make(chan os.Signal,1)
+ signal.Notify(resizeSig,syscall.SIGWINCH)
+ defer signal.Stop(resizeSig)
+ var ws struct{Row,Col,X,Y uint16}
+ sizeDirty:=true
+ var lastSizeCheck time.Time
  if e=ioctl(fd,syscall.TCSETS,unsafe.Pointer(&raw));e!=nil{return e}
  defer func(){
   ioctl(fd,syscall.TCSETS,unsafe.Pointer(&old))
@@ -112,12 +118,13 @@ func run()error{
  events:=eventStream{}
  events.add(time.Now(),"INFO","Telemetry initialized")
  hw:=hardwareInfo{events:&events}
+ collector:=hardwareCollector{}
  hardwareResults:=make(chan hardwareInfo,1)
  hardwarePending:=true
  var stagedHardware *hardwareInfo
  scanUntil:=time.Now().Add(300*time.Millisecond)
  hw.checking=true
- go func(){hardwareResults<-readHardware()}()
+ go func(){hardwareResults<-collector.read()}()
  nextHistory:=next.Add(time.Second)
  var buf [128]byte
  for{
@@ -135,7 +142,7 @@ func run()error{
    result.checking=false
    events.recordStatus(now,hw.statuses,result.statuses)
    if result.failedKnown&&(!hw.failedKnown||hw.failedUnits!=result.failedUnits){events.add(now,"INFO",fmt.Sprintf("Failed units: %d",result.failedUnits))}
-   if len(result.statuses)>0{events.add(now,"INFO","Service scan completed")}else{events.add(now,"INFO","No service status available")}
+   if !result.failedKnown&&hw.failedKnown{events.add(now,"WARN","System status unavailable")}
    result.events=&events
    hw=result;stagedHardware=nil;hardwarePending=false;revision++
   }
@@ -189,15 +196,18 @@ func run()error{
   }
   if !now.Before(nextInfo){info=readSystemInfo();revision++;nextInfo=now.Add(time.Second)}
   if !now.Before(nextStorage){
-   if !hardwarePending{hardwarePending=true;hw.checking=true;events.add(now,"INFO","Checking system state");scanUntil=time.Now().Add(300*time.Millisecond);go func(){hardwareResults<-readHardware()}()}
+   if !hardwarePending{hardwarePending=true;hw.checking=true;scanUntil=time.Now().Add(300*time.Millisecond);go func(){hardwareResults<-collector.read()}()}
    revision++
    nextStorage=now.Add(5*time.Second)
   }
   if !now.Before(next){
    next=next.Add(*interval)
    if !next.After(now){next=now.Add(*interval)}
-   var ws struct{Row,Col,X,Y uint16}
-   if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
+   select{case <-resizeSig:sizeDirty=true;default:}
+   if sizeDirty||now.Sub(lastSizeCheck)>=time.Second{
+    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
+    sizeDirty=false;lastSizeCheck=now
+   }
    key:=struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}{ws.Row,ws.Col,now.Unix(),lastSample,!lastSample.IsZero()&&now.Sub(lastSample)<150*time.Millisecond,revision}
    if key!=lastRenderKey||lastFrame==""{
    resized:=key.row!=lastRenderKey.row||key.col!=lastRenderKey.col
