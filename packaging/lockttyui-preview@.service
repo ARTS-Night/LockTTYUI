@@ -1,0 +1,30 @@
+[Unit]
+Description=LockTTYUI isolated preview on %I
+Conflicts=getty@%i.service
+After=getty@%i.service
+
+[Service]
+Type=exec
+DynamicUser=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0077
+StandardInput=tty-fail
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/%I
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Restart=no
+ExecStart=/usr/bin/lockttyui --exhibit
