@@ -90,3 +90,18 @@ func coreMeterLines(cores map[int]*coreSeries,width,budget int)[]string{
  if limit<len(ids){lines=append(lines,fmt.Sprintf("+%d logical CPUs",len(ids)-limit))}
  return lines
 }
+
+func memoryMeterLines(hw hardwareInfo,width int,withBars bool)[]string{
+ var out []string
+ add:=func(label string,c capacity){
+  if c.total==0{return}
+  p:=100*float64(c.used)/float64(c.total)
+  out=append(out,fmt.Sprintf("%s %s / %s",label,sizeText(c.used),sizeText(c.total)))
+  if withBars{out=append(out,meter(p,max(1,width),"4"))}
+ }
+ add("RAM",hw.ram)
+ if hw.swapKnown{
+  if hw.swapCapacity.total==0{out=append(out,"SWAP OFF")}else{add("SWAP",hw.swapCapacity)}
+ }else if hw.swap!=""{out=append(out,hw.swap)}
+ return out
+}
