@@ -73,8 +73,8 @@ func readServiceStatus()[]statusItem{
 func statusLines(items []statusItem,docker string,width int,ascii bool,checking ...bool)[]string{
  if len(items)==0&&docker==""{return nil}
  scanning:=len(checking)>0&&checking[0]
- title:="\x1b[1;36m// SYSTEM STATUS\x1b[0m"
- if scanning{title+="  \x1b[1;33mSCANNING...\x1b[0m"}
+ title:="\x1b[1;97m// SYSTEM STATUS\x1b[0m"
+ if scanning{title+="  \x1b[90mSCANNING...\x1b[0m"}
  lines:=[]string{title}
  mark:="●";if ascii{mark="*"}
  cols:=max(1,width/28)
@@ -84,11 +84,12 @@ func statusLines(items []statusItem,docker string,width int,ascii bool,checking 
   for j:=i;j<min(i+cols,len(items));j++{
    v:=items[j]
    if scanning{v.color="3";v.state="CHECKING"}
-   b.WriteString(fitLine(fmt.Sprintf("\x1b[3%sm%s\x1b[0m %-12s \x1b[1;3%sm%s\x1b[0m",v.color,mark,v.label,v.color,v.state),cell))
+   sgr:=statusColor(v.color)
+   b.WriteString(fitLine(fmt.Sprintf("\x1b[%sm%s\x1b[0m %-12s \x1b[%sm%s\x1b[0m",sgr,mark,v.label,sgr,v.state),cell))
   }
   lines=append(lines,b.String())
  }
- if docker!=""{if scanning{lines=append(lines,"\x1b[33mCONTAINERS CHECKING\x1b[0m")}else{lines=append(lines,docker)}}
+ if docker!=""{if scanning{lines=append(lines,"\x1b[90mCONTAINERS CHECKING\x1b[0m")}else{lines=append(lines,docker)}}
  return lines
 }
 
@@ -115,5 +116,6 @@ func systemIndicator(hw hardwareInfo,ascii bool)string{
   color="2";if hw.failedUnits>0{color="1"}
   state=fmt.Sprintf("%02d ERR",hw.failedUnits)
  }
- return fmt.Sprintf("\x1b[1;3%sm%s SYSTEM | %s\x1b[0m",color,mark,state)
+ return fmt.Sprintf("\x1b[%sm%s SYSTEM | %s\x1b[0m",statusColor(color),mark,state)
 }
+\nfunc statusColor(color string)string{if color=="2"{return "32"};if color=="1"{return "31"};return "90"}\n
