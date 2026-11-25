@@ -102,8 +102,9 @@ func safeTerm(term string) string {
 }
 
 func tty1GettyArgs(term string) []string {
-	// Match EL9's normal getty login invocation; no autologin, no PAM changes.
-	return []string{"agetty", "-o", "-p -- \\u", "--noclear", "tty1", safeTerm(term)}
+	// Keep systemd's already-open tty1 on standard input, as the stock getty does.
+	// No autologin or PAM changes.
+	return []string{"agetty", "-o", "-p -- \\u", "--noclear", "-", safeTerm(term)}
 }
 
 func execGettyTTY1() error {
