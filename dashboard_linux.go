@@ -59,6 +59,19 @@ func joinPanels(a,b []string,aw int) []string {
  return out
 }
 func percentText(v float64) string {if v<0{return "N/A"};return fmt.Sprintf("%.1f%%",v)}
+
+// Balance CPU/MEMORY graph height without increasing overall panel height.
+// A memory panel with extra swap/paging lines gives those spare rows to CPU.
+func balancedGraphRows(rows,cpuDetailLines,memDetailLines int,side bool)(cpuRows,memRows int){
+ cpuRows,memRows=rows,rows
+ if !side{return}
+ if memDetailLines>cpuDetailLines{
+  cpuRows+=memDetailLines-cpuDetailLines
+ }else if cpuDetailLines>memDetailLines{
+  memRows+=cpuDetailLines-memDetailLines
+ }
+ return
+}
 func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
  lines:=[]string{"\x1b[1;97m// STORAGE\x1b[0m"}
  if len(volumes)==0{return append(lines,"N/A")}
@@ -135,15 +148,19 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
    if side{fixed=5+max(len(coreLines),len(memLines));divisor=2}
    maxRows:=(budget-fixed-5-extra-eventCost)/divisor
    for rows:=maxRows;rows>=2;rows--{
-    cpuRows,memRows:=rows+5+len(coreLines),rows+5+len(memLines)
+    // Fill the otherwise empty half-panel with graph rows instead of padding.
+    // MEMORY often has more paging/swap detail than CPU, especially at 48 rows.
+    cpuGraphRows,memGraphRows:=balancedGraphRows(rows,len(coreLines),len(memLines),side)
+    cpuRows,memRows:=cpuGraphRows+5+len(coreLines),memGraphRows+5+len(memLines)
     upperRows:=cpuRows+memRows
     if side{upperRows=max(cpuRows,memRows)}
     networkRows:=rows+6
     if upperRows+networkRows+extra+eventCost>budget{continue}
     var a,b,n strings.Builder
-    graph:=graphKey{width:pw-9,rows:rows,ascii:ascii,period:period}
-    cpuGraph:=cache.graph(0,graph,func()[]string{var x strings.Builder;barHistory(&x,"",ch,pw-9,rows,ascii,period,0,"7");return splitLines(x.String())[1:]})
-    memGraph:=cache.graph(1,graph,func()[]string{var x strings.Builder;stackedMemoryHistory(&x,mh,sh,pw-9,rows,ascii,period,hw);return splitLines(x.String())[1:]})
+    cpuKey:=graphKey{width:pw-9,rows:cpuGraphRows,ascii:ascii,period:period}
+    memKey:=graphKey{width:pw-9,rows:memGraphRows,ascii:ascii,period:period}
+    cpuGraph:=cache.graph(0,cpuKey,func()[]string{var x strings.Builder;barHistory(&x,"",ch,pw-9,cpuGraphRows,ascii,period,0,"7");return splitLines(x.String())[1:]})
+    memGraph:=cache.graph(1,memKey,func()[]string{var x strings.Builder;stackedMemoryHistory(&x,mh,sh,pw-9,memGraphRows,ascii,period,hw);return splitLines(x.String())[1:]})
     fmt.Fprintf(&a,"\x1b[1;97m// CPU (%d LOGICAL)\x1b[0m  %s",len(cores),percentText(cpuVal))
     fmt.Fprintf(&b,"\x1b[1;97m// MEMORY\x1b[0m %s RAM+SWAP",percentText(combinedMemoryPercent(hw)))
     al:=append([]string{a.String()},cpuGraph...)
