@@ -4,6 +4,9 @@ package main
 
 import (
  "fmt"
+ "context"
+ "os/exec"
+ "time"
  "os"
  "path/filepath"
  "strconv"
@@ -32,7 +35,7 @@ func readDiskTraffic() map[string]traffic {
  return out
 }
 
-type hardwareInfo struct{swap,cpu,gpu string}
+type hardwareInfo struct{swap,cpu,gpu,docker string}
 func readHardware() hardwareInfo{
  h:=hardwareInfo{}
  if b,e:=os.ReadFile("/proc/meminfo");e==nil{
@@ -72,5 +75,48 @@ func readHardware() hardwareInfo{
   if u&&t&&total>0&&used<=total{h.gpu+=fmt.Sprintf(" VRAM %s/%s",sizeText(used),sizeText(total))}
   if idx>=2{break}
  }
+ if h.gpu==""{h.gpu=readNVIDIA()}
+ h.docker=readDockerSummary()
  return h
 }
+
+// Query numeric GPU fields only; no shell, device identities or process information.
+// This optional driver tool is bounded and may be absent or blocked by confinement.
+func readNVIDIA() string{
+ if _,e:=os.Stat("/usr/bin/nvidia-smi");e!=nil{return ""}
+ ctx,cancel:=context.WithTimeout(context.Background(),350*time.Millisecond);defer cancel()
+ cmd:=exec.CommandContext(ctx,"/usr/bin/nvidia-smi","--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu","--format=csv,noheader,nounits")
+ cmd.Env=[]string{"PATH=/usr/bin:/bin","LC_ALL=C"}
+ b,e:=cmd.Output();if e!=nil{return ""}
+ return parseNVIDIA(string(b))
+}
+func parseNVIDIA(data string)string{
+ var lines []string
+ for _,line:=range strings.Split(data,"\n"){
+  f:=strings.Split(line,",");if len(f)!=4{continue}
+  var v [4]uint64;ok:=true
+  for i:=range f{n,e:=strconv.ParseUint(strings.TrimSpace(f[i]),10,64);if e!=nil{ok=false;break};v[i]=n}
+  if !ok||v[0]>100||v[1]>v[2]||v[2]==0||v[2]>1048576||v[3]>150{continue}
+  lines=append(lines,fmt.Sprintf("GPU%02d %d%% VRAM %s/%s TEMP %dC",len(lines)+1,v[0],sizeText(v[1]*1048576),sizeText(v[2]*1048576),v[3]))
+  if len(lines)==2{break}
+ }
+ return strings.Join(lines,"  ")
+}
+
+// Best-effort visible cgroup count; never connect to the Docker socket.
+// A missing or inaccessible Docker hierarchy is not evidence of zero containers.
+func readDockerSummary()string{
+ paths,_:=filepath.Glob("/sys/fs/cgroup/system.slice/docker-*.scope")
+ if len(paths)==0{return ""}
+ active:=0;known:=0
+ for _,p:=range paths{
+  b,e:=os.ReadFile(filepath.Join(p,"cgroup.events"));if e!=nil{continue}
+  for _,line:=range strings.Split(string(b),"\n"){
+   if line=="populated 1"{active++;known++;break}
+   if line=="populated 0"{known++;break}
+  }
+ }
+ if known==0{return ""}
+ return fmt.Sprintf("DOCKER %d populated scopes / %d visible",active,known)
+}
+
