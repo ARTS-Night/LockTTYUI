@@ -22,3 +22,7 @@ See packaging/OPERATIONS.md for passive RPM build and isolated tty9 preview. Do 
 ## Status
 
 Development branch: responsive bar dashboard and preview packaging. Build, tests, RPM generation, physical console validation and production authentication integration must be verified before release.
+
+## Resource bounds
+
+Three single-entry graph caches, 60 samples per series and six events; caches are replaced on history changes and terminal resize. Hardware collection has one in-flight worker. No persistent monitoring database, cron job, or background service is installed by default. The RPM contains a fixed tty9 preview service only; see operations for manual activation and rollback. The service's memory and task limits are provisional and need measurement on real hardware.
