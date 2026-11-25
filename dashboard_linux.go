@@ -121,6 +121,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     if detail>=2{mirroredBars(&disk,dh,wh,w-14,4,ascii,period,"R","W",diskScale);storage=append(storage,splitLines(disk.String())...)}
     candidate=append(candidate,panel(storage,w,ascii)...)
     if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\\x1b[1;36m// GPU\\x1b[0m",hw.gpu},w,ascii)...)}
+    if hw.docker!=""&&detail>=2{candidate=append(candidate,hw.docker)}
     if len(candidate)<=budget{lines=append(lines,candidate...);fitted=true;break}
    }
   }
