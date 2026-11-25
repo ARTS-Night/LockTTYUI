@@ -74,7 +74,9 @@ func run()error{
  ch,mh:=make([]float64,60),make([]float64,60)
  sh:=make([]float64,60)
  for i:=range ch{ch[i]=-1;mh[i]=-1;sh[i]=-1}
- prev,corePrev,prevOK:=readCPUSnapshot()
+ prev,corePrev,prevOK:=readCPUSnapshot(make(map[int]cpu))
+ coreScratch:=make(map[int]cpu)
+ if !prevOK{clear(corePrev)}
  cores:=map[int]*coreSeries{}
  updateCores(cores,nil,corePrev)
  next:=time.Now()
@@ -90,7 +92,9 @@ func run()error{
  var lastRenderKey struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}
  var revision uint64
  cache:=dashboardCache{}
- netPrev,_:=readTraffic()
+ netPrev,netErr:=readTraffic(make(map[string]traffic))
+ netScratch:=make(map[string]traffic)
+ if netErr!=nil{clear(netPrev)}
  netTime:=next
  rx,tx:=-1.0,-1.0
  rh,th:=make([]float64,len(ch)),make([]float64,len(ch))
@@ -101,7 +105,8 @@ func run()error{
  netScale:=rateScale{}
  netScale.update(1024)
  var disks []string
- var diskPrev map[string]traffic
+ diskPrev:=make(map[string]traffic)
+ diskScratch:=make(map[string]traffic)
  diskTime:=next
  dr,dw:=-1.0,-1.0
  events:=eventStream{}
@@ -137,13 +142,14 @@ func run()error{
   if !now.Before(nextSample){
    nextSample=nextSample.Add(*sample)
    if !nextSample.After(now){nextSample=now.Add(*sample)}
-   cur,coreNext,curOK:=readCPUSnapshot()
+   cur,coreNext,curOK:=readCPUSnapshot(coreScratch)
+   if !curOK{clear(coreNext)}
    v=-1.0
    if prevOK&&curOK{v=cpuUsage(prev,cur)}
    prev,prevOK=cur,curOK
    buckets[0].add(v)
    updateCores(cores,corePrev,coreNext)
-   corePrev=coreNext
+   corePrev,coreScratch=coreNext,corePrev
    hw.ram,hw.swapCapacity,hw.swapKnown=readMemoryCapacity()
    m=-1
    if hw.ram.total>0&&hw.swapKnown{
@@ -158,16 +164,18 @@ func run()error{
     buckets[1].add(100*float64(hw.ram.used)/total)
     buckets[4].add(100*float64(hw.swapCapacity.used)/total)
    }
-   netCur,ne:=readTraffic()
+   netCur,ne:=readTraffic(netScratch)
    rx,tx=-1,-1
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
-   if ne!=nil{netCur=nil}
-   netPrev,netTime=netCur,now
+   if ne!=nil{clear(netCur)}
+   netPrev,netScratch=netCur,netPrev
+   netTime=now
    buckets[2].add(rx);buckets[3].add(tx)
-   diskNext:=readDiskTraffic(disks)
+   diskNext:=readDiskTraffic(disks,diskScratch)
    dr,dw=-1,-1
    if a,b,ok:=trafficRate(diskPrev,diskNext,now.Sub(diskTime));ok{dr,dw=a,b}
-   diskPrev,diskTime=diskNext,now
+   diskPrev,diskScratch=diskNext,diskPrev
+   diskTime=now
    if lastSample.IsZero(){if v>=0&&m>=0{events.add(now,"OK","CPU and memory sampled")}else{events.add(now,"WARN","Initial telemetry incomplete")}}
    lastSample=now
   }
