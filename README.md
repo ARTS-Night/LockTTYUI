@@ -2,6 +2,45 @@
 
 Read-only Linux console telemetry dashboard. Go 1.23+, no third-party Go dependencies.
 
+## Install from GitHub Releases (AlmaLinux 9 x86_64)
+
+The RPM is distributed through GitHub Releases rather than a DNF repository.
+Use the repository's readable install helper to select the highest numbered
+published `build-N`, check the official release-asset SHA-256 digest, and
+install or upgrade the RPM without disturbing any active TTY1 session:
+
+```bash
+curl -fL -o lockttyui-install.sh \
+  https://raw.githubusercontent.com/ARTS-Night/LockTTYUI/main/scripts/install.sh
+# Inspect the script before running it.
+less lockttyui-install.sh
+bash lockttyui-install.sh install
+```
+
+Use `bash lockttyui-install.sh install build-13` to pin a specific
+prerelease, `bash lockttyui-install.sh status` to inspect its state,
+or `bash lockttyui-install.sh remove` to uninstall. This script requires
+`curl`, `python3`, `sha256sum`, DNF and sudo. It never executes downloaded
+code as a shell script and **never restarts an active TTY1 login**.
+
+**First activation:** From SSH or TTY2, ensure nobody is logged into TTY1,
+then run:
+
+```bash
+sudo systemctl stop getty@tty1.service
+sudo systemctl start lockttyui-tty1.service
+```
+
+Ctrl+] opens the standard login. After logout, the dashboard returns.
+An upgrade of an already-running dashboard takes effect the next time it
+restarts (normally after a login/logout cycle).
+
+**Security limitation:** The release RPM is currently unsigned. An SHA-256
+digest fetched from the same trusted GitHub repository verifies download
+integrity but does **not** constitute independent publisher authentication.
+Review the release URL and script before executing. Test with an SSH/TTY2
+recovery path available; production stability requires further distro/VM testing.
+
 ## Build and run
 
     go test ./...
