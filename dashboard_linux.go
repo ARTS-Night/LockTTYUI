@@ -78,7 +78,7 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
  return lines
 }
 
-func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time) string {
+func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64) string {
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
  lines:=[]string{"\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"}
@@ -87,8 +87,8 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
  lines=append(lines,centerLine(now.Format("2006-01-02 Mon"),w),telemetryLine(info,w,now,lastSample),"")
  footer:="DISPLAY MODE / q to exit"
  if exhibit{footer="CONSOLE // STANDBY  |  Ctrl+] LOGIN"}
- cpuVal,memVal:=ch[len(ch)-1],mh[len(mh)-1]
- rx,tx:=rh[len(rh)-1],th[len(th)-1]
+ cpuVal,memVal:=live[0],live[1]
+ rx,tx:=live[2],live[3]
  compact:=[]string{fmt.Sprintf("CPU %s   MEMORY %s",percentText(cpuVal),percentText(memVal)),fmt.Sprintf("RX %s  TX %s",rateText(rx),rateText(tx))}
  if w<40||height<24 {
   lines=append([]string{"LOCKTTYUI",now.Format("15:04:05")},compact...)
@@ -106,8 +106,8 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   rows:=min(10,(remaining-storageRows-5-5*factor)/(factor+1))
   if rows>=2 {
    var a,b,n strings.Builder
-   graph(&a,"CPU",ch,pw-9,rows,ascii,period)
-   graph(&b,"MEMORY",mh,pw-9,rows,ascii,period)
+   graph(&a,"CPU",ch,pw-9,rows,ascii,period,cpuVal)
+   graph(&b,"MEMORY",mh,pw-9,rows,ascii,period,memVal)
    ap,bp:=panel(splitLines(a.String()),pw,ascii),panel(splitLines(b.String()),pw,ascii)
    if side{lines=append(lines,joinPanels(ap,bp,pw)...)}else{lines=append(lines,ap...);lines=append(lines,bp...)}
    fmt.Fprintf(&n,"\x1b[1;36m// NETWORK RX %s\x1b[1;34m  TX %s\x1b[0m\r\n",rateText(rx),rateText(tx))
