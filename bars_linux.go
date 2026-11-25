@@ -111,6 +111,9 @@ func memoryMeterLines(hw hardwareInfo,width int,withBars bool)[]string{
 func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
  if w<=0||rows<=0{return nil}
  out:=make([]strings.Builder,rows)
+ // Six possible cells; precompute their escapes instead of formatting per pixel.
+ cells:=map[string]string{"44":"\x1b[44m \x1b[0m","55":"\x1b[45m \x1b[0m","45":"\x1b[34;45m▄\x1b[0m","4":"\x1b[34m▄\x1b[0m","5":"\x1b[35m▄\x1b[0m","":" "}
+ if ascii{cells["45"]="\x1b[35;44m=\x1b[0m";cells["4"]="\x1b[34m.\x1b[0m";cells["5"]="\x1b[35m.\x1b[0m"}
  n:=min(len(ram),len(swap))
  for x:=0;x<w;x++{
   lo,hi:=x*n/w,(x+1)*n/w
@@ -135,14 +138,7 @@ func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
    lower:=(rows-1-y)*2
    color:=func(level int)string{if level<blue{return "4"};if level<total{return "5"};return ""}
    a,z:=color(lower),color(lower+1)
-   switch{
-   case a=="":out[y].WriteByte(' ')
-   case a==z:fmt.Fprintf(&out[y],"\x1b[4%sm \x1b[0m",a)
-   case ascii:
-    if z!=""{fmt.Fprintf(&out[y],"\x1b[3%s;4%sm=\x1b[0m",z,a)}else{fmt.Fprintf(&out[y],"\x1b[3%sm.\x1b[0m",a)}
-   case z=="":fmt.Fprintf(&out[y],"\x1b[3%sm▄\x1b[0m",a)
-   default:fmt.Fprintf(&out[y],"\x1b[3%s;4%sm▄\x1b[0m",a,z)
-   }
+   out[y].WriteString(cells[a+z])
   }
  }
  lines:=make([]string,rows);for i:=range out{lines[i]=out[i].String()};return lines
