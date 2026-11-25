@@ -29,9 +29,18 @@ go vet -mod=readonly ./...
 
 %install
 install -D -m 0755 lockttyui %{buildroot}%{_bindir}/lockttyui
-install -D -m 0644 packaging/lockttyui-preview@.service %{buildroot}%{_unitdir}/lockttyui-preview@.service
+install -D -m 0644 packaging/lockttyui-preview.service %{buildroot}%{_unitdir}/lockttyui-preview.service
+
+%post
+%systemd_post lockttyui-preview.service
+
+%preun
+%systemd_preun lockttyui-preview.service
+
+%postun
+%systemd_postun lockttyui-preview.service
 
 %files
 %{_bindir}/lockttyui
-%{_unitdir}/lockttyui-preview@.service
+%{_unitdir}/lockttyui-preview.service
 %doc README.md ROADMAP.md packaging/OPERATIONS.md
