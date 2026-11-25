@@ -78,7 +78,7 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
  return lines
 }
 
-func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64) string {
+func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries) string {
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
  lines:=[]string{"\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"}
@@ -106,7 +106,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   rows:=min(10,(remaining-storageRows-5-5*factor)/(factor+1))
   if rows>=2 {
    var a,b,n strings.Builder
-   graph(&a,"CPU",ch,pw-9,rows,ascii,period,cpuVal)
+   coreGraph(&a,cores,ch,pw-9,rows,ascii,period,cpuVal)
    graph(&b,"MEMORY",mh,pw-9,rows,ascii,period,memVal)
    ap,bp:=panel(splitLines(a.String()),pw,ascii),panel(splitLines(b.String()),pw,ascii)
    if side{lines=append(lines,joinPanels(ap,bp,pw)...)}else{lines=append(lines,ap...);lines=append(lines,bp...)}
