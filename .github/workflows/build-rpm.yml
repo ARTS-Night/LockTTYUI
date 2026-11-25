@@ -30,10 +30,17 @@ jobs:
             rpmbuild -bb --define "build_release $BUILD_RELEASE" /root/rpmbuild/SPECS/lockttyui.spec
             find /root/rpmbuild/RPMS -name "lockttyui-*.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" -exec cp {} /out/ \;
           '
-      - name: Clean DNF install and removal test
+      - name: Release installer syntax and help checks
         run: |
-          docker run --rm -v "$PWD/dist:/packages:ro" almalinux:9 bash -euxc '
-            dnf -y install systemd util-linux-core
+          bash -n scripts/install.sh
+          bash scripts/install.sh --help | grep -Fq "Install/update"
+
+      - name: Clean DNF install, reinstall and removal test
+        run: |
+          docker run --rm -v "$PWD/dist:/packages:ro" -v "$PWD:/src:ro" almalinux:9 bash -euxc '
+            dnf -y install systemd util-linux-core python3 curl
+            bash -n /src/scripts/install.sh
+            bash /src/scripts/install.sh --help | grep -Fq "Install/update"
             stock_getty=$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)
             dnf -y --nogpgcheck --setopt=install_weak_deps=False install /packages/lockttyui-*.rpm
             rpm -q lockttyui
@@ -64,6 +71,11 @@ jobs:
             test ! -e /etc/systemd/system/getty.target.wants/lockttyui-preview.service
             if rpm -q golang; then exit 1; fi
             /usr/bin/lockttyui --glyph-test
+            # Reinstall exercises RPM lifecycle scripts without starting/stopping
+            # a live getty (the container has no running systemd manager).
+            dnf -y --nogpgcheck reinstall /packages/lockttyui-*.rpm
+            rpm -V lockttyui
+            test -f /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             dnf -y remove lockttyui
             test ! -e /usr/bin/lockttyui
             test ! -e /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
