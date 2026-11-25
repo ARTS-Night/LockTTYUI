@@ -70,7 +70,7 @@ func meter(v float64,w int,color string)string{
  if v<0{return strings.Repeat("-",w)}
  n:=max(0,min(w,int(math.Round(v/100*float64(w)))))
  bg,_:=barPalette(color)
- return "\x1b["+bg+"m"+strings.Repeat(" ",n)+"\x1b[0;90m"+strings.Repeat("·",w-n)+"\x1b[0m"
+ return "\x1b["+bg+"m"+strings.Repeat(" ",n)+"\x1b[0;90m"+strings.Repeat(".",w-n)+"\x1b[0m"
 }
 func coreMeterLines(cores map[int]*coreSeries,width,budget int,caches ...*dashboardCache)[]string{
  if budget<=0||len(cores)==0{return nil}
