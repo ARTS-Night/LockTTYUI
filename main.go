@@ -161,6 +161,9 @@ func run()error{
  ch,mh:=make([]float64,60),make([]float64,60)
  for i:=range ch{ch[i]=-1;mh[i]=-1}
  prev,pe:=readCPU()
+ corePrev:=readCores()
+ cores:=map[int]*coreSeries{}
+ updateCores(cores,nil,corePrev)
  next:=time.Now()
  nextSample:=next.Add(*sample)
  v,m:=-1.0,-1.0
@@ -189,6 +192,9 @@ func run()error{
    if pe==nil&&ce==nil{v=cpuUsage(prev,cur)}
    prev,pe=cur,ce
    buckets[0].add(v)
+   coreNext:=readCores()
+   updateCores(cores,corePrev,coreNext)
+   corePrev=coreNext
    var me error
    m,me=memory()
    if me!=nil{m=-1}
@@ -202,6 +208,7 @@ func run()error{
   }
   if !now.Before(nextHistory){
    ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
+   for _,c:=range cores{c.history=push(c.history,c.bucket.take())}
    nextHistory=nextHistory.Add(time.Second)
    if !nextHistory.After(now){nextHistory=now.Add(time.Second)}
   }
@@ -215,7 +222,7 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx})
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores)
    if frame!=lastFrame {
     if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
     lastFrame=frame
