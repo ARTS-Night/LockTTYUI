@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -102,12 +101,8 @@ func tty1GettyArgs(term string) []string {
 func execGettyTTY1() error {
 	// Remove any partially typed bytes before agetty receives credentials.
 	// agetty itself resets terminal modes if the dashboard was force-killed.
-	_, _, _ = syscall.Syscall(syscall.SYS_IOCTL, os.Stdin.Fd(), uintptr(syscall.TCFLSH), uintptr(syscall.TCIFLUSH))
+	_, _, _ = syscall.Syscall(syscall.SYS_IOCTL, os.Stdin.Fd(), 0x540B /* Linux TCFLSH */, uintptr(syscall.TCIFLUSH))
 	fmt.Fprint(os.Stdout, "\x1b[0m\x1b[?25h\x1b[2J\x1b[H")
-	return syscall.Exec("/sbin/agetty", tty1GettyArgs(os.Getenv("TERM")), os.Environ())
+	return syscall.Exec("/usr/sbin/agetty", tty1GettyArgs(os.Getenv("TERM")), os.Environ())
 }
 
-func tty1DropInContainsOnlyTTY1(content string) bool {
-	return strings.Contains(content, "ExecStart=-/usr/bin/lockttyui --tty1-bridge") &&
-		!strings.Contains(content, "getty@.service")
-}
