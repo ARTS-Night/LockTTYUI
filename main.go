@@ -98,15 +98,25 @@ func run()error{
  var lastSwapKnown bool
  netScale:=rateScale{}
  netScale.update(1024)
- diskPrev:=readDiskTraffic()
+ disks:=discoverDisks()
+ diskPrev:=readDiskTraffic(disks)
  diskTime:=next
  dr,dw:=-1.0,-1.0
- hw:=readHardware()
+ hw:=hardwareInfo{}
+ hardwareResults:=make(chan hardwareInfo,1)
+ hardwarePending:=true
+ go func(){hardwareResults<-readHardware()}()
  nextHistory:=next.Add(time.Second)
  var buf [128]byte
  for{
   select{case <-sig:return nil;default:}
   now:=time.Now()
+  select{
+  case result:=<-hardwareResults:
+   result.ram,result.swapCapacity,result.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
+   hw=result;hardwarePending=false;revision++
+  default:
+  }
   if !now.Before(nextSample){
    nextSample=nextSample.Add(*sample)
    if !nextSample.After(now){nextSample=now.Add(*sample)}
@@ -135,7 +145,7 @@ func run()error{
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
    netPrev,netTime=netCur,now
    buckets[2].add(rx);buckets[3].add(tx)
-   diskNext:=readDiskTraffic()
+   diskNext:=readDiskTraffic(disks)
    dr,dw=-1,-1
    if a,b,ok:=trafficRate(diskPrev,diskNext,now.Sub(diskTime));ok{dr,dw=a,b}
    diskPrev,diskTime=diskNext,now
@@ -151,9 +161,8 @@ func run()error{
   if !now.Before(nextInfo){info=readSystemInfo();revision++;nextInfo=now.Add(time.Second)}
   if !now.Before(nextStorage){
    volumes=readVolumes()
-   nextHW:=readHardware()
-   nextHW.ram,nextHW.swapCapacity,nextHW.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
-   hw=nextHW
+   disks=discoverDisks()
+   if !hardwarePending{hardwarePending=true;go func(){hardwareResults<-readHardware()}()}
    revision++
    nextStorage=now.Add(5*time.Second)
   }
