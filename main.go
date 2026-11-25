@@ -158,6 +158,11 @@ func run()error{
  next:=time.Now()
  nextSample:=next.Add(*sample)
  v,m:=-1.0,-1.0
+ volumes:=readVolumes()
+ nextStorage:=next.Add(5*time.Second)
+ netPrev,_:=readTraffic()
+ netTime:=next
+ rx,tx:=-1.0,-1.0
  var buf [128]byte
  for{
   select{case <-sig:return nil;default:}
@@ -174,6 +179,14 @@ func run()error{
    m,me=memory()
    if me!=nil{m=-1}
    mh=push(mh,m)
+   netCur,ne:=readTraffic()
+   rx,tx=-1,-1
+   if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
+   netPrev,netTime=netCur,now
+  }
+  if !now.Before(nextStorage){
+   volumes=readVolumes()
+   nextStorage=now.Add(5*time.Second)
   }
   if !now.Before(next){
    next=next.Add(*interval)
@@ -183,7 +196,11 @@ func run()error{
    w:=int(ws.Col)-7
    if w>110{w=110}
    clock:=clockLines(now,int(ws.Col)-1,int(ws.Row),*ascii)
-   rows:=(int(ws.Row)-14-(len(clock)-1))/2
+   limit:=min(3,max(1,(int(ws.Row)-20)/3))
+   showMetrics:=int(ws.Row)>=18 && int(ws.Col)>=40
+   extra:=0
+   if showMetrics {extra=4+max(1,min(limit,len(volumes)))}
+   rows:=(int(ws.Row)-14-(len(clock)-1)-extra)/2
    if rows>16{rows=16}
    var b strings.Builder
    b.WriteString("\x1b[H\x1b[36m")
@@ -195,6 +212,10 @@ func run()error{
     b.WriteString("\r\n")
     graph(&b,"MEMORY / UTILIZATION",mh,w,rows,*ascii,*sample)
    }else{fmt.Fprintf(&b,"CPU: %.1f%%\r\nMEM: %.1f%%\r\n",v,m)}
+   if showMetrics {
+    fmt.Fprintf(&b,"\r\n\x1b[1;36m// NETWORK\x1b[0m  RX %s  TX %s\r\n",rateText(rx),rateText(tx))
+    storageLines(&b,volumes,int(ws.Col)-1,limit,*ascii)
+   }
    b.WriteString("\r\nDISPLAY MODE")
    if !*exhibit{b.WriteString(" / q to exit")}
    b.WriteString("\x1b[0m")
