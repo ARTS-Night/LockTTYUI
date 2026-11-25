@@ -86,6 +86,7 @@ func run()error{
  var lastSample time.Time
  nextInfo:=next.Add(time.Second)
  lastFrame:=""
+ writer:=frameWriter{}
  var lastRenderKey struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}
  var revision uint64
  cache:=dashboardCache{}
@@ -128,6 +129,7 @@ func run()error{
    volumes,disks=result.volumes,result.disks
    result.checking=false
    events.recordStatus(now,hw.statuses,result.statuses)
+   if result.failedKnown&&(!hw.failedKnown||hw.failedUnits!=result.failedUnits){events.add(now,"INFO",fmt.Sprintf("Failed units: %d",result.failedUnits))}
    if len(result.statuses)>0{events.add(now,"INFO","Service scan completed")}else{events.add(now,"INFO","No service status available")}
    result.events=&events
    hw=result;stagedHardware=nil;hardwarePending=false;revision++
@@ -191,11 +193,11 @@ func run()error{
    key:=struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}{ws.Row,ws.Col,now.Unix(),lastSample,!lastSample.IsZero()&&now.Sub(lastSample)<150*time.Millisecond,revision}
    if key!=lastRenderKey||lastFrame==""{
    resized:=key.row!=lastRenderKey.row||key.col!=lastRenderKey.col
-   if resized{cache.invalidate()}
+   if resized{cache.invalidate();writer.scratch=nil}
    lastRenderKey=key
    frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,sh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value,&cache)
    if frame!=lastFrame||resized {
-    if _,e=fmt.Fprint(tty,frameDelta(lastFrame,frame,resized));e!=nil{return e}
+    if _,e=tty.Write(writer.delta(lastFrame,frame,resized));e!=nil{return e}
     lastFrame=frame
    }
    }
