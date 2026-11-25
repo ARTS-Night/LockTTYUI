@@ -31,8 +31,10 @@ func discoverDisks() []string {
  }
  return disks
 }
-func readDiskTraffic(disks []string) map[string]traffic {
- out:=make(map[string]traffic,len(disks))
+func readDiskTraffic(disks []string,reuse ...map[string]traffic) map[string]traffic {
+ var out map[string]traffic
+ if len(reuse)>0{out=reuse[0]}
+ if out==nil{out=make(map[string]traffic,len(disks))}else{clear(out)}
  for _,p:=range disks{
   name:=filepath.Base(p)
   b,e:=os.ReadFile(filepath.Join(p,"stat"));if e!=nil{continue}
