@@ -125,14 +125,14 @@ func (s ioTelemetry) rateAt(id int)float64{
 }
 func memoryIOLines(s ioTelemetry,now time.Time,ascii bool,detail int,width int) []string{
  if detail<1||width<28{return nil}
- page:=fmt.Sprintf("PAGE IN %s  OUT %s",s.ioLabel(ioPageIn,now,ascii,false,""),s.ioLabel(ioPageOut,now,ascii,true,""))
- if width<56{
-  page=fmt.Sprintf("PAGE %s IN  %s OUT",rateText(s.rateAt(ioPageIn)),rateText(s.rateAt(ioPageOut)))
- }
+ page:=fmt.Sprintf("PAGE %s IN %s  %s OUT %s",
+  s.indicator(ioPageIn,now,ascii,false),rateText(s.rateAt(ioPageIn)),
+  s.indicator(ioPageOut,now,ascii,true),rateText(s.rateAt(ioPageOut)))
  lines:=[]string{"\x1b[90m// MEMORY I/O (PAGING)\x1b[0m",page}
  if detail>=2{
-  swap:=fmt.Sprintf("SWAP IN %s  OUT %s",s.ioLabel(ioSwapIn,now,ascii,false,""),s.ioLabel(ioSwapOut,now,ascii,true,""))
-  if width<56{swap=fmt.Sprintf("SWAP %s IN  %s OUT",rateText(s.rateAt(ioSwapIn)),rateText(s.rateAt(ioSwapOut)))}
+  swap:=fmt.Sprintf("SWAP %s IN %s  %s OUT %s",
+   s.indicator(ioSwapIn,now,ascii,false),rateText(s.rateAt(ioSwapIn)),
+   s.indicator(ioSwapOut,now,ascii,true),rateText(s.rateAt(ioSwapOut)))
   lines=append(lines,swap)
  }
  return lines
