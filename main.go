@@ -68,7 +68,7 @@ func memory()(float64,error){
  if total==0||!found||avail>total{return -1,fmt.Errorf("invalid memory counters")}
  return 100*float64(total-avail)/float64(total),nil
 }
-func push(h []float64,v float64)[]float64{return append(h[1:],v)}
+func push(h []float64,v float64)[]float64{if len(h)>0{copy(h,h[1:]);h[len(h)-1]=v};return h}
 
 // Commit one averaged sample per fixed history interval.
 type historyBucket struct{sum float64; count int}
@@ -82,7 +82,7 @@ func run()error{
  interval:=flag.Duration("interval",50*time.Millisecond,"display refresh interval (50ms to 5s)")
  sample:=flag.Duration("sample",250*time.Millisecond,"metric sample interval (100ms to 1s)")
  flag.Parse()
- if *glyphTest{fmt.Println("ASCII: + - | *\nUnicode: ─ │ ┌ ┐ └ ┘ ├ ┤\nOptional (not used): ▁ ▂ ▃ ▄ ▅ ▆ ▇ █ ⣿");return nil}
+ if *glyphTest{fmt.Println("ASCII: + - | *\nUnicode: ─ │ ┌ ┐ └ ┘ ├ ┤\nBars: ▄ ▀ █; ASCII mode uses background colors");return nil}
  if *interval<50*time.Millisecond||*interval>5*time.Second||*sample<100*time.Millisecond||*sample>time.Second{return fmt.Errorf("interval must be 50ms..5s; sample must be 100ms..1s")}
  tty,e:=os.OpenFile("/dev/tty",os.O_RDWR,0)
  if e!=nil{return e}
@@ -128,6 +128,8 @@ func run()error{
  rh,th:=make([]float64,len(ch)),make([]float64,len(ch))
  for i:=range rh{rh[i]=-1;th[i]=-1}
  var buckets [6]historyBucket
+ netScale,diskScale:=rateScale{},rateScale{}
+ netScale.update(1024);diskScale.update(1024)
  diskPrev:=readDiskTraffic()
  diskTime:=next
  dr,dw:=-1.0,-1.0
@@ -169,6 +171,7 @@ func run()error{
   if !now.Before(nextHistory){
    ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
    dh=push(dh,buckets[4].take());wh=push(wh,buckets[5].take())
+   netScale.update(trafficScale(rh,th));diskScale.update(trafficScale(dh,wh))
    nextHistory=nextHistory.Add(time.Second)
    if !nextHistory.After(now){nextHistory=now.Add(time.Second)}
   }
@@ -183,7 +186,7 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dh,wh,dr,dw)
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dh,wh,dr,dw,netScale.value,diskScale.value)
    if frame!=lastFrame {
     if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
     lastFrame=frame
