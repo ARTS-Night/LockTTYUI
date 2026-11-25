@@ -36,6 +36,9 @@ jobs:
             dnf -y --nogpgcheck --setopt=install_weak_deps=False install /packages/lockttyui-*.rpm
             rpm -q lockttyui
             rpm -qR lockttyui
+            rpm -ql lockttyui
+            test -f /usr/lib/systemd/system/lockttyui-preview.service
+            if systemctl is-enabled lockttyui-preview.service >/dev/null 2>&1; then exit 1; fi
             if rpm -q golang; then exit 1; fi
             /usr/bin/lockttyui --glyph-test
             dnf -y remove lockttyui
@@ -54,6 +57,7 @@ jobs:
           '
           cd dist
           sha256sum *.rpm > SHA256SUMS
+          sha256sum -c SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: lockttyui-el9-x86_64
