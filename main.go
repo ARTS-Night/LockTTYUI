@@ -41,6 +41,7 @@ func (b *historyBucket) take()float64{v:=-1.0;if b.count>0{v=b.sum/float64(b.cou
 
 func run()error{
  exhibit:=flag.Bool("exhibit",false,"ignore keys except Ctrl+]")
+ ttyFD:=flag.Bool("tty-fd",false,"use inherited terminal for managed console")
  glyphTest:=flag.Bool("glyph-test",false,"print supported glyph candidates for visual inspection")
  ascii:=flag.Bool("ascii",false,"ASCII fallback")
  interval:=flag.Duration("interval",50*time.Millisecond,"display refresh interval (50ms to 5s)")
@@ -48,9 +49,18 @@ func run()error{
  flag.Parse()
  if *glyphTest{fmt.Println("ASCII: + - | *\nUnicode: ─ │ ┌ ┐ └ ┘ ├ ┤\nBars: ▄ ▀ █; ASCII mode uses background colors");return nil}
  if *interval<50*time.Millisecond||*interval>5*time.Second||*sample<100*time.Millisecond||*sample>time.Second{return fmt.Errorf("interval must be 50ms..5s; sample must be 100ms..1s")}
- tty,e:=os.OpenFile("/dev/tty",os.O_RDWR,0)
- if e!=nil{return e}
- defer tty.Close()
+ var tty *os.File
+ var output *os.File
+ var e error
+ if *ttyFD {
+  tty=os.Stdin
+  output=os.Stdout
+ }else{
+  tty,e=os.OpenFile("/dev/tty",os.O_RDWR,0)
+  if e!=nil{return e}
+  defer tty.Close()
+  output=tty
+ }
  fd:=tty.Fd()
  var old syscall.Termios
  if e=ioctl(fd,syscall.TCGETS,unsafe.Pointer(&old));e!=nil{return e}
@@ -74,9 +84,9 @@ func run()error{
  if e=ioctl(fd,syscall.TCSETS,unsafe.Pointer(&raw));e!=nil{return e}
  defer func(){
   ioctl(fd,syscall.TCSETS,unsafe.Pointer(&old))
-  fmt.Fprint(tty,"\x1b[0m\x1b[?25h\x1b[2J\x1b[H")
+  fmt.Fprint(output,"\x1b[0m\x1b[?25h\x1b[2J\x1b[H")
  }()
- fmt.Fprint(tty,"\x1b[?25l\x1b[2J")
+ fmt.Fprint(output,"\x1b[?25l\x1b[2J")
  ch,mh:=make([]float64,60),make([]float64,60)
  sh:=make([]float64,60)
  for i:=range ch{ch[i]=-1;mh[i]=-1;sh[i]=-1}
@@ -216,7 +226,7 @@ func run()error{
    lastRenderKey=key
    frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,sh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value,&cache)
    if frame!=lastFrame||resized {
-    if _,e=tty.Write(writer.delta(lastFrame,frame,resized));e!=nil{return e}
+    if e=writeFull(output,writer.delta(lastFrame,frame,resized));e!=nil{return e}
     lastFrame=frame
    }
    }
@@ -234,4 +244,10 @@ func run()error{
   }
  }
 }
-func main(){if e:=run();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}}
+func main(){
+ if len(os.Args)==2&&os.Args[1]=="--tty1-bridge"{
+  if e:=runTTY1Bridge();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}
+  return
+ }
+ if e:=run();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}
+}
