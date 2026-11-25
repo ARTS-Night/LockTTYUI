@@ -43,8 +43,8 @@ func TestDashboardBounds(t *testing.T){
 func TestStackedMemoryRows(t *testing.T){
  rows:=stackedMemoryRows([]float64{25,50},[]float64{25,50},2,2,false)
  if len(rows)!=2||visibleWidth(rows[0])!=2||visibleWidth(rows[1])!=2{t.Fatal(rows)}
- if !strings.Contains(rows[1],"\x1b[34;45m▄"){t.Fatal("missing mixed cell",rows)}
- if !strings.Contains(rows[0],"\x1b[45m "){t.Fatal("missing swap",rows)}
+ if !strings.Contains(rows[1],"\x1b[37;100m▄"){t.Fatal("missing mixed cell",rows)}
+ if !strings.Contains(rows[0],"\x1b[100m "){t.Fatal("missing swap",rows)}
 }
 
 func TestCombinedMemoryPercent(t *testing.T){
@@ -55,7 +55,7 @@ func TestCombinedMemoryPercent(t *testing.T){
 }
 func TestSmallSwapVisible(t *testing.T){
  rows:=stackedMemoryRows([]float64{50},[]float64{0.01},1,4,false)
- if !strings.Contains(strings.Join(rows,""),"\x1b[35m▄"){t.Fatal(rows)}
+ if !strings.Contains(strings.Join(rows,""),"\x1b[90m▄"){t.Fatal(rows)}
 }
 
 func TestResponsiveGraphGrowth(t *testing.T){
@@ -64,8 +64,8 @@ func TestResponsiveGraphGrowth(t *testing.T){
  hw:=hardwareInfo{ram:capacity{100,50,50},swapKnown:true}
  render:=func(w,height int)string{return dashboard(time.Unix(100,0),w,height,true,true,time.Second,h,h,h,h,h,nil,systemInfo{},time.Time{},[4]float64{50,50,0,0},nil,hw,0,0,1024)}
  small,tall,wide:=render(120,48),render(120,90),render(240,48)
- if coloredCells(tall,"\x1b[46m")<=coloredCells(small,"\x1b[46m"){t.Fatal("graph did not grow vertically")}
- if coloredCells(wide,"\x1b[46m")<=coloredCells(small,"\x1b[46m"){t.Fatal("graph did not grow horizontally")}
+ if coloredCells(tall,"\x1b[47m")<=coloredCells(small,"\x1b[47m"){t.Fatal("graph did not grow vertically")}
+ if coloredCells(wide,"\x1b[47m")<=coloredCells(small,"\x1b[47m"){t.Fatal("graph did not grow horizontally")}
  if !strings.Contains(wide,"-60s"){t.Fatal("history span changed")}
  if len(strings.Split(tall,"\r\n"))!=90{t.Fatal("footer not anchored")}
 }
