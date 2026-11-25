@@ -6,7 +6,17 @@ import (
  "io"
  "strconv"
  "strings"
+ "time"
 )
+
+// Kernel printk and other console writers can overwrite TTY1 behind the
+// frame delta cache. Repaint periodically instead of changing global printk
+// logging policy. No background worker or extra metrics collection is needed.
+const screenRepairInterval = 750 * time.Millisecond
+
+func screenRepairDue(now, lastFull time.Time) bool {
+ return lastFull.IsZero() || now.Before(lastFull) || now.Sub(lastFull) >= screenRepairInterval
+}
 
 // One reusable scratch buffer owned by the terminal loop. No history of frames.
 type frameWriter struct{scratch []byte}
