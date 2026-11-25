@@ -28,6 +28,23 @@ The vendor symlink in `getty.target.wants` starts the dashboard on boot.
 Systemd is reloaded during install but an active user session is never
 restarted by the RPM.
 
+## Release installer helper
+
+`scripts/install.sh` is a readable local helper for GitHub Releases:
+`bash scripts/install.sh install [build-N]`, `status`, and `remove`.
+It chooses the highest numeric published `build-N` (do not depend on GitHub
+API list order), downloads an AlmaLinux 9 x86_64 RPM from the repository's
+official asset URL and checks the GitHub asset's SHA-256 digest before DNF.
+It never invokes `curl | bash`, never relaxes SELinux, and never interrupts
+a logged-in TTY1. Pin the tag to install a known release. Since RPM releases
+are unsigned, GitHub metadata and the RPM share the same trust boundary.
+
+A fresh install does not forcibly take over an existing TTY1 getty. After
+ensuring the VT is idle from TTY2 or SSH, stop `getty@tty1.service` and start
+`lockttyui-tty1.service` to activate the dashboard. If already active,
+the installed executable is picked up at the next dashboard service start.
+The helper does not set up any persistent DNF repository or background updater.
+
 ## Installation / upgrade (test VM)
 
 Keep an SSH session or TTY2 available. Use the RPM downloaded from the
