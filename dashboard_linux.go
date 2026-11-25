@@ -113,14 +113,14 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
     candidate:=[]string{}
     if side{candidate=append(candidate,joinPanels(ap,bp,pw)...)}else{candidate=append(candidate,ap...);candidate=append(candidate,bp...)}
-    fmt.Fprintf(&n,"\\x1b[1;36m// NETWORK RX %s\\x1b[1;34m  TX %s\\x1b[0m\\r\\n",rateText(rx),rateText(tx))
+    fmt.Fprintf(&n,"\x1b[1;36m// NETWORK RX %s\x1b[1;34m  TX %s\x1b[0m\r\n",rateText(rx),rateText(tx))
     mirroredBars(&n,rh,th,w-14,rows,ascii,period,"RX","TX",netScale)
     candidate=append(candidate,panel(splitLines(n.String()),w,ascii)...)
     storage:=storagePanel(volumes,w-4,max(1,detail),ascii)
     storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
     if detail>=2{mirroredBars(&disk,dh,wh,w-14,4,ascii,period,"R","W",diskScale);storage=append(storage,splitLines(disk.String())...)}
     candidate=append(candidate,panel(storage,w,ascii)...)
-    if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\\x1b[1;36m// GPU\\x1b[0m",hw.gpu},w,ascii)...)}
+    if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;36m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
     if hw.docker!=""&&detail>=2{candidate=append(candidate,hw.docker)}
     if len(candidate)<=budget{lines=append(lines,candidate...);fitted=true;break}
    }
