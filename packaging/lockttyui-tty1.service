@@ -1,0 +1,36 @@
+[Unit]
+Description=LockTTYUI pre-login telemetry on tty1
+Documentation=man:systemd.service(5)
+After=systemd-user-sessions.service plymouth-quit-wait.service getty-pre.target
+Before=getty.target
+ConditionPathExists=!/run/lockttyui-tty1-login.ready
+OnSuccess=lockttyui-tty1-handoff.service
+OnFailure=lockttyui-tty1-handoff.service
+StartLimitIntervalSec=20s
+StartLimitBurst=10
+
+[Service]
+Type=exec
+User=nobody
+Group=nobody
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectHome=yes
+ProtectSystem=strict
+PrivateTmp=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+ExecStart=/usr/bin/lockttyui --exhibit --tty-fd
+Restart=no
+TimeoutStopSec=3s
+TasksMax=32
+MemoryHigh=96M
+MemoryMax=192M
