@@ -88,6 +88,7 @@ func run()error{
  lastFrame:=""
  var lastRenderKey struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}
  var revision uint64
+ cache:=dashboardCache{}
  netPrev,_:=readTraffic()
  netTime:=next
  rx,tx:=-1.0,-1.0
@@ -145,6 +146,7 @@ func run()error{
    if hw.ram.total>0&&hw.swapKnown{
     m=combinedMemoryPercent(hw)
     if lastRamTotal!=hw.ram.total||lastSwapTotal!=hw.swapCapacity.total||lastSwapKnown!=hw.swapKnown{
+     cache.generation++
      for i:=range mh{mh[i]=-1;sh[i]=-1}
      buckets[1]=historyBucket{};buckets[4]=historyBucket{}
      lastRamTotal,lastSwapTotal,lastSwapKnown=hw.ram.total,hw.swapCapacity.total,hw.swapKnown
@@ -167,6 +169,7 @@ func run()error{
    lastSample=now
   }
   if !now.Before(nextHistory){
+   cache.generation++
    ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());sh=push(sh,buckets[4].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
    revision++
    netScale.update(trafficScale(rh,th))
@@ -190,7 +193,7 @@ func run()error{
    if key!=lastRenderKey||lastFrame==""{
    resized:=key.row!=lastRenderKey.row||key.col!=lastRenderKey.col
    lastRenderKey=key
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,sh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value)
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,sh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value,&cache)
    if frame!=lastFrame||resized {
     if _,e=fmt.Fprint(tty,frameDelta(lastFrame,frame,resized));e!=nil{return e}
     lastFrame=frame
