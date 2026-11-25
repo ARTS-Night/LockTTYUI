@@ -35,6 +35,8 @@ func runTTY1Bridge() error {
 		child.Stderr = os.Stderr
 		child.Env = os.Environ()
 		child.SysProcAttr = &syscall.SysProcAttr{
+			// Prevent an orphan dashboard if the privileged supervisor is killed.
+			Pdeathsig: syscall.SIGTERM,
 			Credential: &syscall.Credential{
 				Uid: 65534,
 				Gid: 65534,
