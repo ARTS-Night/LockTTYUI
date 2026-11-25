@@ -107,7 +107,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
    storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
    extra:=len(storage)+2
    if hw.gpu!=""&&detail>=1{extra+=4}
-   status:=statusLines(hw.statuses,hw.docker,w-4,ascii)
+   status:=statusLines(hw.statuses,hw.docker,w-4,ascii,hw.checking)
    if detail>=1&&len(status)>0{extra+=len(status)+2}
    for rows:=10;rows>=2;rows--{
     cpuRows,memRows:=rows+5+len(coreLines),rows+5+len(memLines)
