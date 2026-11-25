@@ -17,6 +17,7 @@ type coreSeries struct {
  id int
  history []float64
  bucket historyBucket
+ live float64
 }
 
 func parseCores(r io.Reader) map[int]cpu {
@@ -48,11 +49,12 @@ func updateCores(series map[int]*coreSeries,prev,next map[int]cpu){
  for id,c:=range next{
   s:=series[id]
   if s==nil{
-   s=&coreSeries{id:id,history:make([]float64,60)}
+   s=&coreSeries{id:id,live:-1,history:make([]float64,60)}
    for i:=range s.history{s.history[i]=-1}
    series[id]=s
   }
-  if p,ok:=prev[id];ok{s.bucket.add(cpuUsage(p,c))}
+  s.live=-1
+  if p,ok:=prev[id];ok{s.live=cpuUsage(p,c);s.bucket.add(s.live)}
  }
 }
 var coreColors=[]string{"1;36","1;34","1;32","1;35","1;33","1;31","0;36","0;34","0;32","0;35","0;33","0;31"}
