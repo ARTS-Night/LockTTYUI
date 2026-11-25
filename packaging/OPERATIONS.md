@@ -52,6 +52,30 @@ Do not run `systemctl restart getty@tty1.service` to force the dashboard:
 the new unit deliberately requires a handoff token and preserves stock getty
 as its sole ExecStart.
 
+## Console printk messages overlapping the dashboard
+
+Linux kernel printk can write directly to the foreground virtual console. For
+example, Hyper-V's `hv_balloon` may report a memory-balloon floor warning.
+This is **not** a LockTTYUI event and does not mean the console is compromised.
+
+LockTTYUI repaints the complete frame in-place at most every 750ms. This
+repairs persistent artifacts left behind by asynchronous kernel prints and
+keeps low-overhead delta updates between repaints. A message may be briefly
+visible until the next repair. Kernel journal collection remains unchanged.
+
+There is **no automatic global printk suppression** in the RPM or TTY1 unit:
+it could hide useful diagnostics from other virtual consoles. For a host-wide
+manual opt-in that hides warning-level printk from the physical console but
+still records messages in the kernel journal, save the original level and use:
+
+    cat /proc/sys/kernel/printk
+    sudo dmesg -n 4
+
+This is not TTY1-specific: it changes the console printing level globally.
+To restore, run `sudo dmesg -n ORIGINAL_LEVEL` with the original first number.
+Avoid lowering the console log level on production systems where visible kernel
+warnings are an operational requirement.
+
 ## Diagnosis (TTY2 or SSH)
 
     rpm -q lockttyui
