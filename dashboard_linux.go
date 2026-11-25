@@ -150,7 +150,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   }
   if !fitted{
    lines=append([]string{head,now.Format("15:04:05")},compact...)
-   if len(volumes)>0&&volumes[0].total>0{v:=volumes[0];lines=append(lines,fmt.Sprintf("ROOT %s FREE %s",percentText(100*float64(v.used)/float64(v.total)),sizeText(v.available)))}
+   if len(volumes)>0&&volumes[0].total>0{v:=volumes[0];lines=append(lines,fmt.Sprintf("%s %s FREE %s",v.label,percentText(100*float64(v.used)/float64(v.total)),sizeText(v.available)))}
   }
  }
  if len(lines)>=height{lines=lines[:max(0,height-1)]}
