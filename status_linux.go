@@ -69,9 +69,12 @@ func readServiceStatus()[]statusItem{
  }
  return out
 }
-func statusLines(items []statusItem,docker string,width int,ascii bool)[]string{
+func statusLines(items []statusItem,docker string,width int,ascii bool,checking ...bool)[]string{
  if len(items)==0&&docker==""{return nil}
- lines:=[]string{"\x1b[1;36m// SYSTEM STATUS\x1b[0m"}
+ scanning:=len(checking)>0&&checking[0]
+ title:="\x1b[1;36m// SYSTEM STATUS\x1b[0m"
+ if scanning{title+="  \x1b[1;33mSCANNING...\x1b[0m"}
+ lines:=[]string{title}
  mark:="●";if ascii{mark="*"}
  cols:=max(1,width/28)
  cell:=width/cols
@@ -79,10 +82,11 @@ func statusLines(items []statusItem,docker string,width int,ascii bool)[]string{
   var b strings.Builder
   for j:=i;j<min(i+cols,len(items));j++{
    v:=items[j]
+   if scanning{v.color="3";v.state="CHECKING"}
    b.WriteString(fitLine(fmt.Sprintf("\x1b[3%sm%s\x1b[0m %-12s \x1b[1;3%sm%s\x1b[0m",v.color,mark,v.label,v.color,v.state),cell))
   }
   lines=append(lines,b.String())
  }
- if docker!=""{lines=append(lines,docker)}
+ if docker!=""{if scanning{lines=append(lines,"\x1b[33mCONTAINERS CHECKING\x1b[0m")}else{lines=append(lines,docker)}}
  return lines
 }
