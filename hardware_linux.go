@@ -43,9 +43,9 @@ func readDiskTraffic(disks []string) map[string]traffic {
  return out
 }
 
-type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool; statuses []statusItem; checking bool; events *eventStream; failedUnits uint64; failedKnown bool}
+type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool; statuses []statusItem; checking bool; events *eventStream; failedUnits uint64; failedKnown bool; volumes []volume; disks []string}
 func readHardware() hardwareInfo{
- h:=hardwareInfo{}
+ h:=hardwareInfo{volumes:readVolumes(),disks:discoverDisks()}
  paths,_:=filepath.Glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq")
  var sum float64;var count int
  for _,p:=range paths{if n,ok:=readNumber(p);ok&&n>0{sum+=float64(n);count++}}
