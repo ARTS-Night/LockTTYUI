@@ -11,7 +11,7 @@ import (
 )
 
 func TestTTY1GettyArguments(t *testing.T) {
-	want := []string{"agetty", "-o", "-p -- \\u", "--noclear", "tty1", "linux"}
+	want := []string{"agetty", "-o", "-p -- \\u", "--noclear", "-", "linux"}
 	if got := tty1GettyArgs(""); !reflect.DeepEqual(got, want) {
 		t.Fatalf("expected normal login, got %q", got)
 	}
