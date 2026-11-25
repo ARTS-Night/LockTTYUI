@@ -79,7 +79,8 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
  head:="\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"
- pulse:=heartbeat(now,lastSample,live[0]>=0&&live[1]>=0,ascii)
+ pulse:=systemIndicator(hw,ascii)
+ if visibleWidth(head)+visibleWidth(pulse)+2>w{head="\x1b[1;36mLOCKTTYUI\x1b[0m"}
  if visibleWidth(head)+visibleWidth(pulse)+2<=w{head+=strings.Repeat(" ",w-visibleWidth(head)-visibleWidth(pulse))+pulse}
  lines:=[]string{head}
  clock:=clockLines(now,w,height,ascii)
