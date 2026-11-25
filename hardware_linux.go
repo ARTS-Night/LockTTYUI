@@ -43,7 +43,7 @@ func readDiskTraffic(disks []string) map[string]traffic {
  return out
 }
 
-type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool; statuses []statusItem; checking bool; events *eventStream}
+type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool; statuses []statusItem; checking bool; events *eventStream; failedUnits uint64; failedKnown bool}
 func readHardware() hardwareInfo{
  h:=hardwareInfo{}
  paths,_:=filepath.Glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq")
@@ -77,6 +77,7 @@ func readHardware() hardwareInfo{
  if h.gpu==""{h.gpu=readNVIDIA()}
  h.docker=readDockerSummary()
  h.statuses=readServiceStatus()
+ h.failedUnits,h.failedKnown=readFailedCount()
  return h
 }
 
