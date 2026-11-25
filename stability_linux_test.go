@@ -31,7 +31,7 @@ func TestDashboardBounds(t *testing.T){
  for _,w:=range []int{20,40,80,120,200}{
   for _,height:=range []int{10,24,30,48,80}{
    for _,ascii:=range []bool{true,false}{
-    frame:=dashboard(now,w,height,ascii,true,time.Second,h,h,h,h,[]volume{{"ROOT",capacity{100,50,40}}},systemInfo{},now,[4]float64{50,50,0,0},cores,hardwareInfo{cpu:"AVG 3 GHz",swap:"SWAP 1/2",gpu:"GPU01 50%",docker:"DOCKER 1 populated scopes / 1 visible"},h,h,0,0,1024,1024)
+    frame:=dashboard(now,w,height,ascii,true,time.Second,h,h,h,h,[]volume{{"ROOT",capacity{100,50,40}}},systemInfo{},now,[4]float64{50,50,0,0},cores,hardwareInfo{cpu:"AVG 3 GHz",swap:"SWAP 1/2",gpu:"GPU01 50%",docker:"DOCKER 1 populated scopes / 1 visible"},0,0,1024)
     lines:=strings.Split(frame,"\r\n")
     if len(lines)>height{t.Fatalf("%dx%d: %d lines",w,height,len(lines))}
     for _,line:=range lines{if visibleWidth(line)>min(140,w-1){t.Fatalf("%dx%d: line too wide",w,height)}}
