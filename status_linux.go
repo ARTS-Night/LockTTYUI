@@ -8,6 +8,7 @@ import (
  "os"
  "os/exec"
  "strings"
+ "strconv"
  "time"
 )
 
@@ -89,4 +90,29 @@ func statusLines(items []statusItem,docker string,width int,ascii bool,checking 
  }
  if docker!=""{if scanning{lines=append(lines,"\x1b[33mCONTAINERS CHECKING\x1b[0m")}else{lines=append(lines,docker)}}
  return lines
+}
+
+ // Read the system manager's aggregate count; never expose unit names.
+func parseFailedCount(data string)(uint64,bool){
+ n,err:=strconv.ParseUint(strings.TrimSpace(data),10,64)
+ return n,err==nil
+}
+func readFailedCount()(uint64,bool){
+ ctx,cancel:=context.WithTimeout(context.Background(),time.Second)
+ defer cancel()
+ cmd:=exec.CommandContext(ctx,"/usr/bin/systemctl","--system","--no-pager","show","--property=NFailedUnits","--value")
+ cmd.Env=[]string{"PATH=/usr/bin:/bin","LC_ALL=C","SYSTEMD_COLORS=0"}
+ cmd.WaitDelay=100*time.Millisecond
+ data,err:=cmd.Output()
+ if err!=nil{return 0,false}
+ return parseFailedCount(string(data))
+}
+func systemIndicator(hw hardwareInfo,ascii bool)string{
+ mark:="●";if ascii{mark="*"}
+ color,state:="3","N/A"
+ if hw.checking{state="CHECKING"}else if hw.failedKnown{
+  color="2";if hw.failedUnits>0{color="1"}
+  state=fmt.Sprintf("%02d ERR",hw.failedUnits)
+ }
+ return fmt.Sprintf("\x1b[1;3%sm%s SYSTEM | %s\x1b[0m",color,mark,state)
 }
