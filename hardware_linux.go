@@ -46,22 +46,40 @@ func readDiskTraffic(disks []string,reuse ...map[string]traffic) map[string]traf
 }
 
 type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool; statuses []statusItem; checking bool; events *eventStream; failedUnits uint64; failedKnown bool; volumes []volume; disks []string}
-func readHardware() hardwareInfo{
- h:=hardwareInfo{volumes:readVolumes(),disks:discoverDisks()}
- paths,_:=filepath.Glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq")
- var sum float64;var count int
- for _,p:=range paths{if n,ok:=readNumber(p);ok&&n>0{sum+=float64(n);count++}}
- if count>0{h.cpu=fmt.Sprintf("AVG %.2f GHz",sum/float64(count)/1e6)}
+type hardwareCollector struct{
+ discovered time.Time
+ mounts,disks,freq,temps,cards []string
+ nvidia bool
+}
+func (c *hardwareCollector) discover(now time.Time){
+ c.mounts=discoverMountPaths()
+ c.disks=discoverDisks()
+ c.freq,_=filepath.Glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq")
+ c.temps=nil
  sensors,_:=filepath.Glob("/sys/class/hwmon/hwmon*/name")
- var maxTemp uint64
  for _,p:=range sensors{
   b,e:=os.ReadFile(p);if e!=nil{continue}
   switch strings.TrimSpace(string(b)){case "coretemp","k10temp","zenpower":default:continue}
   inputs,_:=filepath.Glob(filepath.Join(filepath.Dir(p),"temp*_input"))
-  for _,input:=range inputs{if n,ok:=readNumber(input);ok&&n<=150000&&n>maxTemp{maxTemp=n}}
+  c.temps=append(c.temps,inputs...)
  }
+ c.cards,_=filepath.Glob("/sys/class/drm/card[0-9]*")
+ _,err:=os.Stat("/usr/bin/nvidia-smi");c.nvidia=err==nil
+ c.discovered=now
+}
+func readHardware() hardwareInfo{var c hardwareCollector;return c.read()}
+func (c *hardwareCollector) read() hardwareInfo{
+ now:=time.Now()
+ if c.discovered.IsZero()||now.Sub(c.discovered)>=30*time.Second{c.discover(now)}
+ h:=hardwareInfo{volumes:readVolumePaths(c.mounts),disks:c.disks}
+ paths:=c.freq
+ var sum float64;var count int
+ for _,p:=range paths{if n,ok:=readNumber(p);ok&&n>0{sum+=float64(n);count++}}
+ if count>0{h.cpu=fmt.Sprintf("AVG %.2f GHz",sum/float64(count)/1e6)}
+ var maxTemp uint64
+ for _,input:=range c.temps{if n,ok:=readNumber(input);ok&&n<=150000&&n>maxTemp{maxTemp=n}}
  if maxTemp>0{h.cpu=strings.TrimSpace(fmt.Sprintf("%s  TEMP %.0fC",h.cpu,float64(maxTemp)/1000))}
- cards,_:=filepath.Glob("/sys/class/drm/card[0-9]*")
+ cards:=c.cards
  idx:=0
  for _,p:=range cards{
   if strings.Contains(filepath.Base(p),"-"){continue}
@@ -76,7 +94,7 @@ func readHardware() hardwareInfo{
   if u&&t&&total>0&&used<=total{h.gpu+=fmt.Sprintf(" VRAM %s/%s",sizeText(used),sizeText(total))}
   if idx>=2{break}
  }
- if h.gpu==""{h.gpu=readNVIDIA()}
+ if h.gpu==""&&c.nvidia{h.gpu=readNVIDIA()}
  h.docker=readDockerSummary()
  h.statuses=readServiceStatus()
  h.failedUnits,h.failedKnown=readFailedCount()
