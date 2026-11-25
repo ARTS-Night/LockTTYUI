@@ -35,7 +35,7 @@ func readDiskTraffic() map[string]traffic {
  return out
 }
 
-type hardwareInfo struct{swap,cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool}
+type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool}
 func readHardware() hardwareInfo{
  h:=hardwareInfo{}
  paths,_:=filepath.Glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq")
@@ -128,4 +128,10 @@ func memoryCapacity(data string)(ram,swap capacity,swapKnown bool){
 func readMemoryCapacity()(capacity,capacity,bool){
  b,e:=os.ReadFile("/proc/meminfo");if e!=nil{return capacity{},capacity{},false}
  return memoryCapacity(string(b))
+}
+
+func combinedMemoryPercent(hw hardwareInfo)float64{
+ if hw.ram.total==0||!hw.swapKnown{return -1}
+ total:=float64(hw.ram.total)+float64(hw.swapCapacity.total)
+ return 100*(float64(hw.ram.used)+float64(hw.swapCapacity.used))/total
 }
