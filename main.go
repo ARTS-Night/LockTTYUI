@@ -3,13 +3,10 @@
 package main
 
 import (
- "bufio"
  "flag"
  "fmt"
  "os"
  "os/signal"
- "strconv"
- "strings"
  "syscall"
  "time"
  "unsafe"
@@ -23,23 +20,6 @@ func ioctl(fd uintptr, req uintptr, p unsafe.Pointer) error {
 
 type cpu struct{ total, idle uint64 }
 
-func readCPU() (cpu, error) {
- f,e:=os.Open("/proc/stat")
- if e!=nil{return cpu{},e}
- defer f.Close()
- s:=bufio.NewScanner(f)
- if !s.Scan(){return cpu{},fmt.Errorf("missing CPU counters")}
- a:=strings.Fields(s.Text())
- if len(a)<9||a[0]!="cpu"{return cpu{},fmt.Errorf("invalid CPU counters")}
- var c cpu
- for i:=1;i<=8;i++{
-  v,e:=strconv.ParseUint(a[i],10,64)
-  if e!=nil{return cpu{},e}
-  c.total+=v
-  if i==4||i==5{c.idle+=v}
- }
- return c,nil
-}
 func cpuUsage(a,b cpu)float64{
  if b.total<=a.total||b.idle<a.idle{return -1}
  d:=b.total-a.total
@@ -94,8 +74,7 @@ func run()error{
  ch,mh:=make([]float64,60),make([]float64,60)
  sh:=make([]float64,60)
  for i:=range ch{ch[i]=-1;mh[i]=-1;sh[i]=-1}
- prev,pe:=readCPU()
- corePrev:=readCores()
+ prev,corePrev,prevOK:=readCPUSnapshot()
  cores:=map[int]*coreSeries{}
  updateCores(cores,nil,corePrev)
  next:=time.Now()
@@ -107,6 +86,8 @@ func run()error{
  var lastSample time.Time
  nextInfo:=next.Add(time.Second)
  lastFrame:=""
+ var lastRenderKey struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}
+ var revision uint64
  netPrev,_:=readTraffic()
  netTime:=next
  rx,tx:=-1.0,-1.0
@@ -129,12 +110,11 @@ func run()error{
   if !now.Before(nextSample){
    nextSample=nextSample.Add(*sample)
    if !nextSample.After(now){nextSample=now.Add(*sample)}
-   cur,ce:=readCPU()
+   cur,coreNext,curOK:=readCPUSnapshot()
    v=-1.0
-   if pe==nil&&ce==nil{v=cpuUsage(prev,cur)}
-   prev,pe=cur,ce
+   if prevOK&&curOK{v=cpuUsage(prev,cur)}
+   prev,prevOK=cur,curOK
    buckets[0].add(v)
-   coreNext:=readCores()
    updateCores(cores,corePrev,coreNext)
    corePrev=coreNext
    hw.ram,hw.swapCapacity,hw.swapKnown=readMemoryCapacity()
@@ -163,16 +143,18 @@ func run()error{
   }
   if !now.Before(nextHistory){
    ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());sh=push(sh,buckets[4].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
+   revision++
    netScale.update(trafficScale(rh,th))
    nextHistory=nextHistory.Add(time.Second)
    if !nextHistory.After(now){nextHistory=now.Add(time.Second)}
   }
-  if !now.Before(nextInfo){info=readSystemInfo();nextInfo=now.Add(time.Second)}
+  if !now.Before(nextInfo){info=readSystemInfo();revision++;nextInfo=now.Add(time.Second)}
   if !now.Before(nextStorage){
    volumes=readVolumes()
    nextHW:=readHardware()
    nextHW.ram,nextHW.swapCapacity,nextHW.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
    hw=nextHW
+   revision++
    nextStorage=now.Add(5*time.Second)
   }
   if !now.Before(next){
@@ -180,10 +162,14 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
+   key:=struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}{ws.Row,ws.Col,now.Unix(),lastSample,!lastSample.IsZero()&&now.Sub(lastSample)<150*time.Millisecond,revision}
+   if key!=lastRenderKey||lastFrame==""{
+   lastRenderKey=key
    frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,sh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value)
    if frame!=lastFrame {
     if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
     lastFrame=frame
+   }
    }
   }
   n,e:=syscall.Read(int(fd),buf[:])
