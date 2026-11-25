@@ -75,7 +75,9 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
  return lines
 }
 
-func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,sh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dr,dw float64,netScale float64) string {
+func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,sh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dr,dw float64,netScale float64,caches ...*dashboardCache) string {
+ var cache *dashboardCache
+ if len(caches)>0{cache=caches[0]}
  w:=min(512,width-1)
  height=min(256,height)
  if w<1||height<1{return "\x1b[H\x1b[J"}
@@ -105,7 +107,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   for detail:=3;detail>=0&&!fitted;detail--{
    // Calculate the exact panel cost before rendering any history.
    coreLines:=[]string{}
-   if detail>=1{coreLines=coreMeterLines(cores,pw-4,detail+1+max(0,(height-48)/12))}
+   if detail>=1{coreLines=coreMeterLines(cores,pw-4,detail+1+max(0,(height-48)/12),cache)}
    if hw.cpu!=""{coreLines=append(coreLines,hw.cpu)}
    memLines:=memoryMeterLines(hw,pw-4,detail>=1)
    storage:=storagePanel(volumes,w-4,max(1,detail+max(0,(height-48)/12)),ascii)
@@ -122,16 +124,24 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
    if len(eventLines)>0{eventCost=len(eventLines)+2}
    // CPU and RAM share height; network uses an even or odd row count.
    // Select geometry using integers only, then draw once.
-   for rows:=max(2,budget);rows>=2;rows--{
+   fixed:=10+len(coreLines)+len(memLines)
+   divisor:=3
+   if side{fixed=5+max(len(coreLines),len(memLines));divisor=2}
+   maxRows:=(budget-fixed-5-extra-eventCost)/divisor
+   for rows:=maxRows;rows>=2;rows--{
     cpuRows,memRows:=rows+5+len(coreLines),rows+5+len(memLines)
     upperRows:=cpuRows+memRows
     if side{upperRows=max(cpuRows,memRows)}
     networkRows:=rows+5
     if upperRows+networkRows+extra+eventCost>budget{continue}
     var a,b,n strings.Builder
-    barHistory(&a,fmt.Sprintf("CPU (%d LOGICAL)",len(cores)),ch,pw-9,rows,ascii,period,cpuVal,"6")
-    stackedMemoryHistory(&b,mh,sh,pw-9,rows,ascii,period,hw)
-    al,bl:=splitLines(a.String()),splitLines(b.String())
+    graph:=graphKey{width:pw-9,rows:rows,ascii:ascii,period:period}
+    cpuGraph:=cache.graph(0,graph,func()[]string{var x strings.Builder;barHistory(&x,"",ch,pw-9,rows,ascii,period,0,"6");return splitLines(x.String())[1:]})
+    memGraph:=cache.graph(1,graph,func()[]string{var x strings.Builder;stackedMemoryHistory(&x,mh,sh,pw-9,rows,ascii,period,hw);return splitLines(x.String())[1:]})
+    fmt.Fprintf(&a,"\x1b[1;36m// CPU (%d LOGICAL)\x1b[0m  %s",len(cores),percentText(cpuVal))
+    fmt.Fprintf(&b,"\x1b[1;34m// MEMORY\x1b[0m %s RAM+SWAP",percentText(combinedMemoryPercent(hw)))
+    al:=append([]string{a.String()},cpuGraph...)
+    bl:=append([]string{b.String()},memGraph...)
     al=append(al,coreLines...)
     bl=append(bl,memLines...)
     if side{for len(al)<len(bl){al=append(al,"")};for len(bl)<len(al){bl=append(bl,"")}}
@@ -139,8 +149,8 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     candidate:=[]string{}
     if side{candidate=append(candidate,joinPanels(ap,bp,pw)...)}else{candidate=append(candidate,ap...);candidate=append(candidate,bp...)}
     fmt.Fprintf(&n,"\x1b[1;36m// NETWORK RX %s\x1b[1;34m  TX %s\x1b[0m\r\n",rateText(rx),rateText(tx))
-    mirroredBars(&n,rh,th,w-14,rows,ascii,period,"RX","TX",netScale)
-    candidate=append(candidate,panel(splitLines(n.String()),w,ascii)...)
+    networkGraph:=cache.graph(2,graphKey{width:w-14,rows:rows,ascii:ascii,scale:netScale,period:period},func()[]string{var x strings.Builder;mirroredBars(&x,rh,th,w-14,rows,ascii,period,"RX","TX",netScale);return splitLines(x.String())})
+    candidate=append(candidate,panel(append(splitLines(n.String()),networkGraph...),w,ascii)...)
     candidate=append(candidate,panel(storage,w,ascii)...)
     if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;36m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
     if detail>=1&&len(status)>0{candidate=append(candidate,panel(status,w,ascii)...)}
