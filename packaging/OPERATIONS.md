@@ -50,3 +50,7 @@ Only pushes to the build branch run CI. After successful tests and static ELF ch
     sudo dnf install ./lockttyui-*.rpm
 
 If local RPM signature policy rejects this unsigned package, review the source and release provenance first; only then optionally use `sudo dnf --nogpgcheck install ./lockttyui-*.rpm` for this transaction. Never change global signature policy. A checksum downloaded with the RPM detects corruption but does not authenticate the publisher. Private repository access remains required while the repository is private.
+
+## Automatic RPM setup and login safety
+The RPM automatically installs the binary and the fixed tty9 preview unit, and registers it with systemd through RPM macros. It does not replace getty, PAM, SSH, or an active login terminal. Automatic login-screen takeover is intentionally gated until physical-console, crash, input-flush, SELinux, and uninstall rollback tests pass. Installing a package must not silently strand the machine without a working login.
+The `build` branch is the only CI trigger. Each successful build creates an unsigned prerelease; the workflow does not publish a DNF repository or install packages on the target machine.
