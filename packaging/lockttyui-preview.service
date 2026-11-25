@@ -1,0 +1,34 @@
+[Unit]
+Description=LockTTYUI isolated preview on tty9
+After=getty@tty9.service
+ConditionPathExists=/dev/tty9
+
+[Service]
+Type=exec
+DynamicUser=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0077
+StandardInput=tty-fail
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty9
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Restart=no
+TimeoutStopSec=3s
+TasksMax=32
+MemoryHigh=96M
+MemoryMax=192M
+ExecStart=/usr/bin/lockttyui --exhibit
