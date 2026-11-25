@@ -72,8 +72,7 @@ func coreGraph(b *strings.Builder,series map[int]*coreSeries,total []float64,w,r
    if g==' '{continue}
    c:=&grid[y][x]
    if c.count==0{c.glyph=g;c.color=color}else{
-    if c.glyph!=g{if ascii{c.glyph='+'}else{c.glyph='┼'}}
-    c.color="1;37"
+    if c.glyph!=g{if ascii{c.glyph='+'}else{c.glyph='┼'};c.color="1;37"}else if c.count==1{c.color="1;36"}
    }
    c.count++
   }}
