@@ -16,12 +16,16 @@ type coreSeries struct {
 }
 
 func parseCPUSnapshot(r io.Reader,reuse ...map[int]cpu) (cpu,map[int]cpu,bool) {
+ return parseCPUSnapshotBuffer(r,nil,reuse...)
+}
+func parseCPUSnapshotBuffer(r io.Reader,buffer []byte,reuse ...map[int]cpu) (cpu,map[int]cpu,bool) {
  var total cpu
  found:=false
  var result map[int]cpu
  if len(reuse)>0{result=reuse[0]}
  if result==nil{result=make(map[int]cpu)}else{clear(result)}
  s:=bufio.NewScanner(r)
+ if buffer!=nil{s.Buffer(buffer,65536)}
  for s.Scan(){
   line:=s.Text()
   if !strings.HasPrefix(line,"cpu"){continue}
@@ -42,9 +46,10 @@ func parseCPUSnapshot(r io.Reader,reuse ...map[int]cpu) (cpu,map[int]cpu,bool) {
  return total,result,found&&s.Err()==nil
 }
 func parseCores(r io.Reader)map[int]cpu{_,cores,_:=parseCPUSnapshot(r);return cores}
-func readCPUSnapshot(reuse ...map[int]cpu)(cpu,map[int]cpu,bool){
+func readCPUSnapshot(reuse ...map[int]cpu)(cpu,map[int]cpu,bool){return readCPUBuffer(nil,reuse...)}
+func readCPUBuffer(buffer []byte,reuse ...map[int]cpu)(cpu,map[int]cpu,bool){
  f,e:=os.Open("/proc/stat");if e!=nil{if len(reuse)>0&&reuse[0]!=nil{clear(reuse[0]);return cpu{},reuse[0],false};return cpu{},nil,false};defer f.Close()
- return parseCPUSnapshot(f,reuse...)
+ return parseCPUSnapshotBuffer(f,buffer,reuse...)
 }
 func readCores() map[int]cpu {
  f,e:=os.Open("/proc/stat");if e!=nil{return nil};defer f.Close()
