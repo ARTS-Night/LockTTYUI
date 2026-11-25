@@ -78,7 +78,7 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
  return lines
 }
 
-func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries) string {
+func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dh,wh []float64,dr,dw float64) string {
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
  lines:=[]string{"\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"}
@@ -101,19 +101,32 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   remaining:=height-len(lines)-2
   limit:=min(3,max(1,(remaining-15)/3))
   storage:=storagePanel(volumes,w-4,limit,ascii)
+  storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
   storageRows:=len(storage)+2
+  extras:=0
+  if hw.cpu!=""||hw.swap!=""{extras++}
+  if hw.gpu!=""{extras++}
+  remaining-=extras
   factor:=2;if side{factor=1}
   rows:=min(10,(remaining-storageRows-5-5*factor)/(factor+1))
   if rows>=2 {
    var a,b,n strings.Builder
    coreGraph(&a,cores,ch,pw-9,rows,ascii,period,cpuVal)
    graph(&b,"MEMORY",mh,pw-9,rows,ascii,period,memVal)
-   ap,bp:=panel(splitLines(a.String()),pw,ascii),panel(splitLines(b.String()),pw,ascii)
+   al,bl:=splitLines(a.String()),splitLines(b.String())
+   if hw.cpu!=""||hw.swap!=""{al=append(al,hw.cpu);bl=append(bl,hw.swap)}
+   ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
    if side{lines=append(lines,joinPanels(ap,bp,pw)...)}else{lines=append(lines,ap...);lines=append(lines,bp...)}
    fmt.Fprintf(&n,"\x1b[1;36m// NETWORK RX %s\x1b[1;34m  TX %s\x1b[0m\r\n",rateText(rx),rateText(tx))
    trafficGraph(&n,rh,th,w-14,rows,ascii,period)
    lines=append(lines,panel(splitLines(n.String()),w,ascii)...)
+   if remaining-(rows+5)*(factor+1)-storageRows>=5 {
+    var disk strings.Builder
+    trafficGraph(&disk,dh,wh,w-14,3,ascii,period,"R","W")
+    storage=append(storage,splitLines(disk.String())...)
+   }
    lines=append(lines,panel(storage,w,ascii)...)
+   if hw.gpu!=""{lines=append(lines,"\x1b[1;36m// "+hw.gpu+"\x1b[0m")}
   }else{
    lines=append(lines,compact...)
    lines=append(lines,panel(storage,w,ascii)...)
