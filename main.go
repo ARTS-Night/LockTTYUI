@@ -126,6 +126,8 @@ func run()error{
  diskScratch:=make(map[string]traffic)
  diskTime:=next
  dr,dw:=-1.0,-1.0
+ vmPrev,vmPrevErr:=readVMCounters()
+ vmTime:=next
  events:=eventStream{}
  events.add(time.Now(),"INFO","Telemetry initialized")
  hw:=hardwareInfo{events:&events}
@@ -149,6 +151,7 @@ func run()error{
   if stagedHardware!=nil&&!now.Before(scanUntil){
    result:=*stagedHardware
    result.ram,result.swapCapacity,result.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
+   result.io=hw.io
    volumes,disks=result.volumes,result.disks
    result.checking=false
    events.recordStatus(now,hw.statuses,result.statuses)
@@ -194,6 +197,11 @@ func run()error{
    if a,b,ok:=trafficRate(diskPrev,diskNext,now.Sub(diskTime));ok{dr,dw=a,b}
    diskPrev,diskScratch=diskNext,diskPrev
    diskTime=now
+   vmCur,vmErr:=readVMCounters()
+   vmRate:=[4]float64{-1,-1,-1,-1}
+   if vmPrevErr==nil&&vmErr==nil{vmRate=vmRates(vmPrev,vmCur,now.Sub(vmTime))}
+   vmPrev,vmPrevErr,vmTime=vmCur,vmErr,now
+   hw.io.update(now,[ioCount]float64{rx,tx,dr,dw,vmRate[0],vmRate[1],vmRate[2],vmRate[3]})
    if lastSample.IsZero(){if v>=0&&m>=0{events.add(now,"OK","CPU and memory sampled")}else{events.add(now,"WARN","Initial telemetry incomplete")}}
    lastSample=now
   }
