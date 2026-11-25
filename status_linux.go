@@ -58,8 +58,8 @@ func readServiceStatus()[]statusItem{
   cmd.Env=[]string{"PATH=/usr/bin:/bin","LC_ALL=C","SYSTEMD_COLORS=0"}
   cmd.WaitDelay=100*time.Millisecond
   data,err:=cmd.Output()
-  // systemctl may return nonzero for absent units while still emitting valid blocks.
-  if err==nil||ctx.Err()==nil{out=parseServiceStatus(string(data))}
+  // Do not treat a timeout or failed query as a successful empty scan.
+  if ctx.Err()==nil&&(err==nil||len(data)>0){out=parseServiceStatus(string(data))}
   cancel()
  }
  if data,err:=os.ReadFile("/sys/fs/selinux/enforce");err==nil{
