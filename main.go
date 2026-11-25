@@ -124,11 +124,11 @@ func run()error{
  exhibit:=flag.Bool("exhibit",false,"ignore keys except Ctrl+]")
  glyphTest:=flag.Bool("glyph-test",false,"print supported glyph candidates for visual inspection")
  ascii:=flag.Bool("ascii",false,"ASCII fallback")
- interval:=flag.Duration("interval",100*time.Millisecond,"display refresh interval (100ms to 5s)")
- sample:=flag.Duration("sample",500*time.Millisecond,"metric sample interval (100ms to 1s)")
+ interval:=flag.Duration("interval",50*time.Millisecond,"display refresh interval (50ms to 5s)")
+ sample:=flag.Duration("sample",250*time.Millisecond,"metric sample interval (100ms to 1s)")
  flag.Parse()
  if *glyphTest{fmt.Println("ASCII: + - | *\nUnicode: ─ │ ┌ ┐ └ ┘ ├ ┤\nOptional (not used): ▁ ▂ ▃ ▄ ▅ ▆ ▇ █ ⣿");return nil}
- if *interval<100*time.Millisecond||*interval>5*time.Second||*sample<100*time.Millisecond||*sample>time.Second{return fmt.Errorf("interval must be 100ms..5s; sample must be 100ms..1s")}
+ if *interval<50*time.Millisecond||*interval>5*time.Second||*sample<100*time.Millisecond||*sample>time.Second{return fmt.Errorf("interval must be 50ms..5s; sample must be 100ms..1s")}
  tty,e:=os.OpenFile("/dev/tty",os.O_RDWR,0)
  if e!=nil{return e}
  defer tty.Close()
@@ -142,7 +142,7 @@ func run()error{
  raw.Cflag &^= syscall.CSIZE|syscall.PARENB
  raw.Cflag |= syscall.CS8
  raw.Cc[syscall.VMIN]=0
- raw.Cc[syscall.VTIME]=1
+ raw.Cc[syscall.VTIME]=0
  sig:=make(chan os.Signal,1)
  signal.Notify(sig,syscall.SIGINT,syscall.SIGTERM,syscall.SIGHUP,syscall.SIGQUIT)
  defer signal.Stop(sig)
@@ -160,6 +160,10 @@ func run()error{
  v,m:=-1.0,-1.0
  volumes:=readVolumes()
  nextStorage:=next.Add(5*time.Second)
+ info:=readSystemInfo()
+ var lastSample time.Time
+ nextInfo:=next.Add(time.Second)
+ lastFrame:=""
  netPrev,_:=readTraffic()
  netTime:=next
  rx,tx:=-1.0,-1.0
@@ -186,7 +190,9 @@ func run()error{
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
    netPrev,netTime=netCur,now
    rh=push(rh,rx);th=push(th,tx)
+   lastSample=now
   }
+  if !now.Before(nextInfo){info=readSystemInfo();nextInfo=now.Add(time.Second)}
   if !now.Before(nextStorage){
    volumes=readVolumes()
    nextStorage=now.Add(5*time.Second)
@@ -196,12 +202,16 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,*sample,ch,mh,rh,th,volumes)
-   if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,*sample,ch,mh,rh,th,volumes,info,lastSample)
+   if frame!=lastFrame {
+    if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
+    lastFrame=frame
+   }
   }
   n,e:=syscall.Read(int(fd),buf[:])
   if e!=nil{return e}
   for _,k:=range buf[:n]{if k==29||(!*exhibit&&(k=='q'||k==3)){return nil}}
+  time.Sleep(10*time.Millisecond)
  }
 }
 func main(){if e:=run();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}}
