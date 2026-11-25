@@ -93,15 +93,15 @@ func coreMeterLines(cores map[int]*coreSeries,width,budget int)[]string{
 
 func memoryMeterLines(hw hardwareInfo,width int,withBars bool)[]string{
  var out []string
- add:=func(label string,c capacity){
+ add:=func(label string,c capacity,color string){
   if c.total==0{return}
   p:=100*float64(c.used)/float64(c.total)
-  out=append(out,fmt.Sprintf("%s %s / %s",label,sizeText(c.used),sizeText(c.total)))
-  if withBars{out=append(out,meter(p,max(1,width),"4"))}
+  out=append(out,fmt.Sprintf("\x1b[1;3%sm%s\x1b[0m %s / %s",color,label,sizeText(c.used),sizeText(c.total)))
+  if withBars{out=append(out,meter(p,max(1,width),color))}
  }
- add("RAM",hw.ram)
+ add("RAM",hw.ram,"4")
  if hw.swapKnown{
-  if hw.swapCapacity.total==0{out=append(out,"SWAP OFF")}else{add("SWAP",hw.swapCapacity)}
+  if hw.swapCapacity.total==0{out=append(out,"SWAP OFF")}else{add("SWAP",hw.swapCapacity,"5")}
  }else if hw.swap!=""{out=append(out,hw.swap)}
  return out
 }
