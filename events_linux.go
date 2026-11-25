@@ -16,11 +16,11 @@ func (e *eventStream) add(at time.Time,level,message string){
 }
 func (e *eventStream) lines(limit int)[]string{
  if e==nil||e.count==0||limit<=0{return nil}
- lines:=[]string{"\x1b[1;36m// EVENT STREAM\x1b[0m"}
+ lines:=[]string{"\x1b[1;97m// EVENT STREAM\x1b[0m"}
  for i:=min(limit,e.count);i>0;i--{
   v:=e.items[(e.next-i+len(e.items))%len(e.items)]
-  color:="6";if v.level=="OK"{color="2"}else if v.level=="WARN"{color="3"}else if v.level=="FAIL"{color="1"}
-  lines=append(lines,fmt.Sprintf("%s \x1b[3%sm[%-4s]\x1b[0m %s",v.at.Format("15:04:05"),color,v.level,v.message))
+  sgr:="90";if v.level=="OK"{sgr="32"}else if v.level=="WARN"||v.level=="FAIL"{sgr="31"}
+  lines=append(lines,fmt.Sprintf("\x1b[90m%s\x1b[0m \x1b[%sm[%-4s]\x1b[0m %s",v.at.Format("15:04:05"),sgr,v.level,v.message))
  }
  return lines
 }
