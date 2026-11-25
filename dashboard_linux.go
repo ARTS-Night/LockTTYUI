@@ -108,7 +108,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     al,bl:=splitLines(a.String()),splitLines(b.String())
     if detail>=1{al=append(al,coreMeterLines(cores,pw-4,detail+1)...)}
     if hw.cpu!=""{al=append(al,hw.cpu)}
-    if hw.swap!=""{bl=append(bl,hw.swap)}
+    bl=append(bl,memoryMeterLines(hw,pw-4,detail>=1)... )
     if side{for len(al)<len(bl){al=append(al,"")};for len(bl)<len(al){bl=append(bl,"")}}
     ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
     candidate:=[]string{}
