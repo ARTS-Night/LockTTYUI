@@ -1,10 +1,13 @@
 Name:           lockttyui
-Version:        0.5.0
+Version:        0.6.0
 Release:        1%{?dist}
 Summary:        Read-only Linux console telemetry dashboard
 License:        Proprietary
 Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  golang >= 1.23
+BuildRequires:  systemd-rpm-macros
+# Optional integration uses systemctl; no Go runtime or GPU/Docker dependency.
+Recommends:     systemd
 
 %description
 Standalone console telemetry dashboard. Installation does not change authentication
@@ -14,11 +17,13 @@ or enable any service.
 %setup -q
 
 %build
-CGO_ENABLED=0 go build -trimpath -o lockttyui .
+export CGO_ENABLED=0 GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
+ go build -mod=readonly -trimpath -ldflags="-s -w" -o lockttyui .
 
 %check
-go test ./...
-go vet ./...
+export CGO_ENABLED=0 GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
+go test -mod=readonly ./...
+go vet -mod=readonly ./...
 
 %install
 install -D -m 0755 lockttyui %{buildroot}%{_bindir}/lockttyui
