@@ -1,124 +1,102 @@
-# LockTTYUI operations — AlmaLinux 9 (TTY1 only)
+# LockTTYUI operations — AlmaLinux 9, TTY1 only
 
-## Automatic integration on RPM installation
+## SELinux fix: v0.6.0 build 9 and later
 
-The RPM ships a vendor-level, **instance-specific** drop-in at
-`/usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf`.
-There is **no** modification of `getty@.service`, `getty@tty2.service` or higher terminals,
-PAM, SSH, login policy, or `/etc/systemd`.
+Build 8 had a login regression: the privileged LockTTYUI bridge directly
+executed /usr/sbin/agetty under the UI service's SELinux
+`unconfined_service_t` domain. Authentication succeeded but SELinux denied
+the following transition to a normal user shell (`unconfined_t`). Do **not**
+disable SELinux or add broad allow rules to work around this.
 
-- Install with `sudo dnf install ./lockttyui-*.rpm` (review and verify the RPM first).
-- RPM reloads systemd's unit definitions, **but never restarts a running getty or user session**.
-- On the next normal **getty@tty1.service** start (typically the next boot), the tty1
-  bridge starts an unprivileged telemetry child and displays LockTTYUI.
-- Press **Ctrl+]** on tty1 to leave the dashboard and run the distro's normal `agetty`
-  login. Enter a username/password using the normal login and PAM mechanisms.
-- After the user logs out, the existing systemd getty restart policy runs the
-  dashboard again. TTY2+ remain the distro's unmodified login consoles; SSH remains
-  unchanged. Use Ctrl+Alt+F2 to reach tty2 at the physical console.
+The corrected design uses two distinct services:
 
-The tty1 bridge itself runs under the privileged getty service solely to hand off
-to `/usr/sbin/agetty`. The dashboard subprocess runs as UID/GID 65534 with no
-supplementary groups, using inherited tty file descriptors. This is not auto-login:
-the dashboard never requests or handles a password. If the display exits with an
-error, fails to launch, or is killed, the bridge falls back to ordinary agetty.
-A stop signal from systemd shuts the child down without unexpectedly launching login.
+1. `lockttyui-tty1.service` runs an unprivileged, read-only dashboard (nobody)
+   using the open /dev/tty1; it never handles credentials.
+2. On Ctrl+] (or UI failure) `lockttyui-tty1-handoff.service` records a
+   temporary /run handoff token and starts `getty@tty1.service` through
+   systemd. The default vendor `getty@.service` ExecStart is untouched,
+   so **systemd starts the distribution agetty with its normal SELinux
+   transition**. Passwords and shells use the normal PAM/SELinux path.
+3. A clean logout stops the getty service (Restart=no only for tty1);
+   OnSuccess starts `lockttyui-tty1.service` again.
 
-The override is suitable for the **text-only virtual-console** environment used
-for this project. Graphical login managers, custom tty1 getty overrides, SELinux
-policy, virtual terminal behavior, and local fonts must be reviewed before use
-outside a disposable AlmaLinux test VM. The package does not forcibly switch
-`graphical.target` to `multi-user.target` or seize an active console.
+Only `getty@tty1.service` has an instance-specific vendor drop-in.
+The stock `getty@.service`, tty2+, SSH, and PAM remain unchanged.
+An ephemeral token at `/run/lockttyui-tty1-login.ready` gates getty
+startup so the two services do not claim the console simultaneously.
+The vendor symlink in `getty.target.wants` starts the dashboard on boot.
+Systemd is reloaded during install but an active user session is never
+restarted by the RPM.
 
-## Verify in a disposable VM before deploying
+## Installation / upgrade (test VM)
 
-Keep SSH and a separate working TTY2 login available. Do not try the following
-on an actively used console. Before reboot, inspect without changing the session:
+Keep an SSH session or TTY2 available. Use the RPM downloaded from the
+latest passing GitHub Releases prerelease; check SHA256SUMS before installing.
+Update from build 8 (or install fresh) with:
 
+    sudo dnf upgrade ./lockttyui-0.6.0-N.el9.x86_64.rpm
+
+Use `dnf install ./...` if it is not already installed. On build8-to-new
+upgrades, the old bridge may still be serving tty1 until the service is
+switched. **Only from tty2 or SSH with no logged-in tty1 session**, do:
+
+    sudo systemctl stop getty@tty1.service
+    sudo systemctl start lockttyui-tty1.service
+
+The dashboard should appear on tty1. Press Ctrl+] and verify a normal login
+with SELinux **Enforcing**. Run `id -Z` in the resulting shell. Its user
+domain should normally be `unconfined_t`, not `unconfined_service_t`.
+After `exit` / logout the dashboard should return.
+
+Do not run `systemctl restart getty@tty1.service` to force the dashboard:
+the new unit deliberately requires a handoff token and preserves stock getty
+as its sole ExecStart.
+
+## Diagnosis (TTY2 or SSH)
+
+    rpm -q lockttyui
+    getenforce
     systemctl cat getty@tty1.service
-    systemctl cat getty@tty2.service
-    systemd-analyze verify getty@tty1.service
-    systemctl get-default
+    systemctl status lockttyui-tty1.service lockttyui-tty1-handoff.service getty@tty1.service --no-pager
+    sudo journalctl -b -u lockttyui-tty1.service -u lockttyui-tty1-handoff.service -u getty@tty1.service -n 120 --no-pager
+    sudo ausearch -m AVC,USER_AVC -ts recent
 
-The tty1 override must appear only in the first output; the second must still
-use the stock getty template. On a test VM, after logging out of tty1, restart
-the service **from SSH or tty2** to test immediately:
+Do not paste passwords, tokens, private system logs, or personal information
+into public issues. Go tests and RPM container tests **cannot** verify live
+SELinux domain transitions or physical console ownership; those need an
+AlmaLinux 9 VM with enforcing SELinux.
 
-    sudo systemctl restart getty@tty1.service
+## Rollback / removal
 
-Validation checklist:
-1. tty1 displays LockTTYUI; tty2 can log in without it.
-2. Ctrl+] shows the normal agetty username/password prompt; no automatic login.
-3. After a normal user login and logout on tty1, dashboard returns.
-4. Killing only the unprivileged display child lets the bridge show agetty.
-5. `systemctl stop getty@tty1.service` does not start a second agetty.
-6. A system reboot returns tty1 dashboard and preserves tty2/SSH access.
-7. SELinux enforcing, CPU/GPU visibility, resize, keyboard flush and failure
-   conditions are checked on the actual console.
-
-None of these physical-console conditions is proven by a Docker CI build alone.
-
-## Revert / uninstall
-
-The RPM owns its drop-in under `/usr/lib`, not a file under `/etc`. On final
-removal, that file is removed and systemd is reloaded; the distributor's normal
-tty1 getty definition is restored for its **next** start. No other gettys change.
+With no tty1 user session, use SSH or tty2:
 
     sudo dnf remove lockttyui
-    systemctl cat getty@tty1.service
+    sudo systemctl daemon-reload
+    sudo systemctl start getty@tty1.service
 
-If immediate restoration is needed, from **SSH or tty2** (never during an active
-tty1 login), restart the existing getty:
+The final removal script stops the pre-login dashboard, removes the handoff
+token, restores the distributor's instance configuration and starts the
+stock getty if idle. A logged-in tty1 session is not restarted.
+This does not remove unrelated /etc/systemd drop-ins.
 
-    sudo systemctl restart getty@tty1.service
+## Manual tty9 preview
 
-After removal, test standard login on tty1 and tty2. If a machine already has
-custom tty1 settings, the package cannot safely override or delete them; review
-the unit effective configuration first.
-
-## Manual tty9 preview (developer-only)
-
-The separate `lockttyui-preview.service` remains disabled and is never enabled
-or started by the RPM. It is for manual experiments on a known-free tty9:
+`lockttyui-preview.service` remains an opt-in preview (never auto-enabled).
+Only use it on a verified vacant tty9:
 
     sudo systemctl stop getty@tty9.service
     sudo systemctl start lockttyui-preview.service
 
-Restore after stopping the preview:
+To revert:
 
     sudo systemctl stop lockttyui-preview.service
     sudo systemctl start getty@tty9.service
 
-The preview is intentionally not a login manager. Under `PrivateNetwork`,
-network telemetry may be unavailable.
+## Local RPM and release workflow
 
-## Local RPM build
-
-Go 1.23+, `rpm-build`, and `systemd-rpm-macros` are required only on the build
-host. From the repository root:
-
-    mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-    git archive --format=tar.gz --prefix=lockttyui-0.6.0/ HEAD > ~/rpmbuild/SOURCES/lockttyui-0.6.0.tar.gz
-    cp packaging/lockttyui.spec ~/rpmbuild/SPECS/
-    rpmbuild -bb ~/rpmbuild/SPECS/lockttyui.spec
-
-Review RPM contents and dependencies before installing. The binary is built
-with CGO disabled; no third-party Go modules are required. Docker,
-NVIDIA utilities, and individual monitored system services are optional.
-
-## GitHub Actions releases
-
-Only a push to the `build` branch triggers the RPM workflow. It builds inside
-AlmaLinux 9, runs Go tests/vet, tests RPM installation and removal, checks
-static ELF dependencies, and publishes unsigned prereleases with SHA256SUMS
-only after those checks pass.
-
-Download both from the same release and run:
-
-    sha256sum -c SHA256SUMS
-    sudo dnf install ./lockttyui-*.rpm
-
-A matching checksum does not authenticate an unsigned publisher. Inspect the
-source and provenance; if a verified local RPM requires a one-off exception,
-use `sudo dnf --nogpgcheck install ./lockttyui-*.rpm` only after review. Do not
-change global signature policy. There is not yet a hosted DNF repository.
+Go 1.23+, rpm-build, systemd-rpm-macros are required on the build host.
+GitHub Actions on the `build` branch builds in AlmaLinux 9 and tests Go,
+RPM install/uninstall, static ELF dependencies and SHA256 checks, then
+publishes an **unsigned** prerelease only after all checks succeed.
+A checksum detects accidental alteration but does not authenticate the
+unsigned publisher. There is no hosted DNF repository yet.
