@@ -19,14 +19,22 @@ func readNumber(path string)(uint64,bool){
 }
 
 // Physical/virtual whole leaf disks only; exclude partitions and stacked devices.
-func readDiskTraffic() map[string]traffic {
- out:=map[string]traffic{}
+func discoverDisks() []string {
+ var disks []string
  paths,_:=filepath.Glob("/sys/block/*")
  for _,p:=range paths{
   name:=filepath.Base(p)
   if strings.HasPrefix(name,"loop")||strings.HasPrefix(name,"ram")||strings.HasPrefix(name,"zram")||strings.HasPrefix(name,"sr"){continue}
   if _,e:=os.Stat(filepath.Join(p,"device"));e!=nil{continue}
   slaves,e:=os.ReadDir(filepath.Join(p,"slaves"));if e!=nil||len(slaves)>0{continue}
+  disks=append(disks,p)
+ }
+ return disks
+}
+func readDiskTraffic(disks []string) map[string]traffic {
+ out:=make(map[string]traffic,len(disks))
+ for _,p:=range disks{
+  name:=filepath.Base(p)
   b,e:=os.ReadFile(filepath.Join(p,"stat"));if e!=nil{continue}
   f:=strings.Fields(string(b));if len(f)<7{continue}
   a,e:=strconv.ParseUint(f[2],10,64);z,e2:=strconv.ParseUint(f[6],10,64)
@@ -77,6 +85,7 @@ func readNVIDIA() string{
  if _,e:=os.Stat("/usr/bin/nvidia-smi");e!=nil{return ""}
  ctx,cancel:=context.WithTimeout(context.Background(),350*time.Millisecond);defer cancel()
  cmd:=exec.CommandContext(ctx,"/usr/bin/nvidia-smi","--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu","--format=csv,noheader,nounits")
+ cmd.WaitDelay=100*time.Millisecond
  cmd.Env=[]string{"PATH=/usr/bin:/bin","LC_ALL=C"}
  b,e:=cmd.Output();if e!=nil{return ""}
  return parseNVIDIA(string(b))
