@@ -35,18 +35,9 @@ func readDiskTraffic() map[string]traffic {
  return out
 }
 
-type hardwareInfo struct{swap,cpu,gpu,docker string}
+type hardwareInfo struct{swap,cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool}
 func readHardware() hardwareInfo{
  h:=hardwareInfo{}
- if b,e:=os.ReadFile("/proc/meminfo");e==nil{
-  var total,free uint64
-  for _,line:=range strings.Split(string(b),"\n"){
-   f:=strings.Fields(line);if len(f)<2{continue}
-   n,e:=strconv.ParseUint(f[1],10,64);if e!=nil{continue}
-   switch f[0]{case "SwapTotal:":total=n;case "SwapFree:":free=n}
-  }
-  if total>0&&free<=total{h.swap=fmt.Sprintf("SWAP %s / %s",sizeText((total-free)*1024),sizeText(total*1024))}
- }
  paths,_:=filepath.Glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq")
  var sum float64;var count int
  for _,p:=range paths{if n,ok:=readNumber(p);ok&&n>0{sum+=float64(n);count++}}
@@ -120,3 +111,21 @@ func readDockerSummary()string{
  return fmt.Sprintf("DOCKER %d populated scopes / %d visible",active,known)
 }
 
+
+func memoryCapacity(data string)(ram,swap capacity,swapKnown bool){
+ values:=map[string]uint64{}
+ for _,line:=range strings.Split(data,"\n"){
+  f:=strings.Fields(line);if len(f)<3||f[2]!="kB"{continue}
+  switch f[0]{case "MemTotal:","MemAvailable:","SwapTotal:","SwapFree:":default:continue}
+  n,e:=strconv.ParseUint(f[1],10,64);if e==nil&&n<=^uint64(0)/1024{values[f[0]]=n*1024}
+ }
+ t,tok:=values["MemTotal:"];a,aok:=values["MemAvailable:"]
+ if tok&&aok&&t>0&&a<=t{ram=capacity{t,t-a,a}}
+ t,tok=values["SwapTotal:"];a,aok=values["SwapFree:"]
+ if tok&&aok&&a<=t{swap=capacity{t,t-a,a};swapKnown=true}
+ return
+}
+func readMemoryCapacity()(capacity,capacity,bool){
+ b,e:=os.ReadFile("/proc/meminfo");if e!=nil{return capacity{},capacity{},false}
+ return memoryCapacity(string(b))
+}
