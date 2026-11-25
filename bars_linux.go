@@ -13,6 +13,7 @@ import (
 // A cell uses its background for full bars, so no block font is required.
 // Optional half blocks improve resolution on terminals with suitable fonts.
 func barRows(h []float64,w,rows int,scale float64,invert,ascii bool,color string) []string {
+ if w<=0||rows<=0{return nil}
  out:=make([]strings.Builder,rows)
  for x:=0;x<w;x++ {
   lo,hi:=x*len(h)/w,(x+1)*len(h)/w
@@ -49,9 +50,8 @@ func timeAxis(b *strings.Builder,w,offset,n int,period time.Duration){
  fmt.Fprintf(b,"%s%s%sNOW\r\n",strings.Repeat(" ",offset),left,strings.Repeat(" ",max(1,w-len(left)-3)))
 }
 // Same scale, separate halves, no overlapping characters.
-func mirroredBars(b *strings.Builder,a,z []float64,w,rows int,ascii bool,period time.Duration,first,second string){
- scale:=trafficScale(a,z)
- upper:=max(1,(rows+1)/2);lower:=max(1,rows-upper)
+func mirroredBars(b *strings.Builder,a,z []float64,w,rows int,ascii bool,period time.Duration,first,second string,scale float64){
+ upper:=max(1,rows/2);lower:=upper
  for y,line:=range barRows(a,w,upper,scale,false,ascii,"6"){
   label:="";if y==0{label=sizeText(uint64(scale))}
   fmt.Fprintf(b,"%8s |%s\r\n",label,line)
@@ -81,7 +81,8 @@ func coreMeterLines(cores map[int]*coreSeries,width,budget int)[]string{
   for j:=i;j<min(i+cols,limit);j++{
    c:=cores[ids[j]];v:=c.live
    color:="6";if v>=90{color="1"}else if v>=80{color="3"}
-   text:=fmt.Sprintf("C%03d %4s %s",ids[j],percentText(v),meter(v,max(2,cell-14),color))
+   value:=" N/A";if v>=0{value=fmt.Sprintf("%3.0f%%",v)}
+   text:=fmt.Sprintf("C%03d %s %s",ids[j],value,meter(v,max(2,cell-11),color))
    b.WriteString(fitLine(text,cell))
   }
   lines=append(lines,b.String())
