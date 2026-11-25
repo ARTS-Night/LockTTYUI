@@ -102,7 +102,9 @@ func run()error{
  diskPrev:=readDiskTraffic(disks)
  diskTime:=next
  dr,dw:=-1.0,-1.0
- hw:=hardwareInfo{}
+ events:=eventStream{}
+ events.add(time.Now(),"INFO","Telemetry initialized")
+ hw:=hardwareInfo{events:&events}
  hardwareResults:=make(chan hardwareInfo,1)
  hardwarePending:=true
  var stagedHardware *hardwareInfo
@@ -123,6 +125,9 @@ func run()error{
    result:=*stagedHardware
    result.ram,result.swapCapacity,result.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
    result.checking=false
+   events.recordStatus(now,hw.statuses,result.statuses)
+   if len(result.statuses)>0{events.add(now,"INFO","Service scan completed")}else{events.add(now,"INFO","No service status available")}
+   result.events=&events
    hw=result;stagedHardware=nil;hardwarePending=false;revision++
   }
   if !now.Before(nextSample){
@@ -157,6 +162,7 @@ func run()error{
    dr,dw=-1,-1
    if a,b,ok:=trafficRate(diskPrev,diskNext,now.Sub(diskTime));ok{dr,dw=a,b}
    diskPrev,diskTime=diskNext,now
+   if lastSample.IsZero(){if v>=0&&m>=0{events.add(now,"OK","CPU and memory sampled")}else{events.add(now,"WARN","Initial telemetry incomplete")}}
    lastSample=now
   }
   if !now.Before(nextHistory){
@@ -170,7 +176,7 @@ func run()error{
   if !now.Before(nextStorage){
    volumes=readVolumes()
    disks=discoverDisks()
-   if !hardwarePending{hardwarePending=true;hw.checking=true;scanUntil=time.Now().Add(300*time.Millisecond);go func(){hardwareResults<-readHardware()}()}
+   if !hardwarePending{hardwarePending=true;hw.checking=true;events.add(now,"INFO","Checking system state");scanUntil=time.Now().Add(300*time.Millisecond);go func(){hardwareResults<-readHardware()}()}
    revision++
    nextStorage=now.Add(5*time.Second)
   }
