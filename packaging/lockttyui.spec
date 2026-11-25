@@ -32,8 +32,6 @@ go vet -mod=readonly ./...
 %install
 install -D -m 0755 lockttyui %{buildroot}%{_bindir}/lockttyui
 install -D -m 0644 packaging/lockttyui-preview.service %{buildroot}%{_unitdir}/lockttyui-preview.service
-%dir %{_unitdir}/getty@tty1.service.d
-%{_unitdir}/getty@tty1.service.d/50-lockttyui.conf
 install -D -m 0644 packaging/50-lockttyui-tty1.conf %{buildroot}%{_unitdir}/getty@tty1.service.d/50-lockttyui.conf
 
 %post
@@ -52,4 +50,6 @@ if [ -d /run/systemd/system ]; then /usr/bin/systemctl daemon-reload >/dev/null 
 %files
 %{_bindir}/lockttyui
 %{_unitdir}/lockttyui-preview.service
+%dir %{_unitdir}/getty@tty1.service.d
+%{_unitdir}/getty@tty1.service.d/50-lockttyui.conf
 %doc README.md ROADMAP.md packaging/OPERATIONS.md
