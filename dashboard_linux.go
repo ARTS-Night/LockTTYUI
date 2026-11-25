@@ -78,7 +78,10 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
 func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,sh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dr,dw float64,netScale float64) string {
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
- lines:=[]string{"\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"}
+ head:="\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"
+ pulse:=heartbeat(now,lastSample,live[0]>=0&&live[1]>=0,ascii)
+ if visibleWidth(head)+visibleWidth(pulse)+2<=w{head+=strings.Repeat(" ",w-visibleWidth(head)-visibleWidth(pulse))+pulse}
+ lines:=[]string{head}
  clock:=clockLines(now,w,height,ascii)
  lines=append(lines,clock...)
  lines=append(lines,centerLine(now.Format("2006-01-02 Mon"),w),telemetryLine(info,w,now,lastSample),"")
@@ -131,6 +134,12 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     candidate=append(candidate,panel(storage,w,ascii)...)
     if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;36m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
     if detail>=1&&len(status)>0{candidate=append(candidate,panel(status,w,ascii)...)}
+    if detail>=1{
+     for count:=min(3,budget-len(candidate)-3);count>0;count--{
+      eventLines:=hw.events.lines(count)
+      if len(eventLines)>0&&len(candidate)+len(eventLines)+2<=budget{candidate=append(candidate,panel(eventLines,w,ascii)...);break}
+     }
+    }
     if len(candidate)<=budget{lines=append(lines,candidate...);fitted=true;break}
    }
   }
