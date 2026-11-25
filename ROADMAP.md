@@ -11,11 +11,14 @@ The temporary systemd experiment is not production-ready. The successful OnSucce
 ## v0.3 — visual refresh
 - [x] Outline clock, cyan CPU and blue memory graphs.
 - [x] Compact clock and ASCII fallback.
-- [ ] Build/test and real console review.
+- [x] User reports the outline design works on the development VM.
+- [ ] Confirm automated build/test results.
 
 ## v0.4 — metrics
-- Network RX/TX rates and history; no addresses, endpoints, ports or packet contents.
-- Filesystem capacity, clearly distinct from physical disk capacity.
+- [x] Initial aggregate RX/TX rate display and counter delta tests; no addresses, endpoints, ports or packet contents.
+- [ ] Network history and host statistics under PrivateNetwork; current collector observes its own namespace only.
+- [x] Initial root and selected local filesystem capacity, anonymized labels and duplicate filtering.
+- [ ] Validate capacity display, mount namespace visibility, and narrow consoles.
 - Optional GPU detection.
 - Preserve network isolation: do not assume /proc/net/dev exposes host counters under PrivateNetwork.
 
