@@ -124,15 +124,18 @@ func readDockerSummary()string{
 
 
 func memoryCapacity(data string)(ram,swap capacity,swapKnown bool){
- values:=map[string]uint64{}
+ var values [4]uint64
+ var known [4]bool
  for _,line:=range strings.Split(data,"\n"){
-  f:=strings.Fields(line);if len(f)<3||f[2]!="kB"{continue}
-  switch f[0]{case "MemTotal:","MemAvailable:","SwapTotal:","SwapFree:":default:continue}
-  n,e:=strconv.ParseUint(f[1],10,64);if e==nil&&n<=^uint64(0)/1024{values[f[0]]=n*1024}
+  key,rest,ok:=strings.Cut(line,":");if !ok{continue}
+  idx:=0
+  switch key{case "MemTotal":idx=0;case "MemAvailable":idx=1;case "SwapTotal":idx=2;case "SwapFree":idx=3;default:continue}
+  f:=strings.Fields(rest);if len(f)<2||f[1]!="kB"{continue}
+  n,e:=strconv.ParseUint(f[0],10,64);if e==nil&&n<=^uint64(0)/1024{values[idx]=n*1024;known[idx]=true}
  }
- t,tok:=values["MemTotal:"];a,aok:=values["MemAvailable:"]
+ t,tok:=values[0],known[0];a,aok:=values[1],known[1]
  if tok&&aok&&t>0&&a<=t{ram=capacity{t,t-a,a}}
- t,tok=values["SwapTotal:"];a,aok=values["SwapFree:"]
+ t,tok=values[2],known[2];a,aok=values[3],known[3]
  if tok&&aok&&a<=t{swap=capacity{t,t-a,a};swapKnown=true}
  return
 }
