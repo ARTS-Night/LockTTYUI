@@ -12,6 +12,7 @@ import (
 type graphKey struct{generation uint64; width,rows int; ascii bool; scale float64; period time.Duration}
 type graphEntry struct{key graphKey; valid bool; lines []string}
 type dashboardCache struct{generation uint64; graphs [3]graphEntry; ids []int}
+func (c *dashboardCache) invalidate(){c.generation++;c.graphs=[3]graphEntry{}}
 func (c *dashboardCache) graph(slot int,key graphKey,draw func()[]string)[]string{
  if c==nil{return draw()}
  key.generation=c.generation
