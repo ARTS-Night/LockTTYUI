@@ -163,6 +163,8 @@ func run()error{
  netPrev,_:=readTraffic()
  netTime:=next
  rx,tx:=-1.0,-1.0
+ rh,th:=make([]float64,len(ch)),make([]float64,len(ch))
+ for i:=range rh{rh[i]=-1;th[i]=-1}
  var buf [128]byte
  for{
   select{case <-sig:return nil;default:}
@@ -183,6 +185,7 @@ func run()error{
    rx,tx=-1,-1
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
    netPrev,netTime=netCur,now
+   rh=push(rh,rx);th=push(th,tx)
   }
   if !now.Before(nextStorage){
    volumes=readVolumes()
@@ -200,8 +203,10 @@ func run()error{
    showMetrics:=int(ws.Row)>=18 && int(ws.Col)>=40
    extra:=0
    if showMetrics {extra=4+max(1,min(limit,len(volumes)))}
+   netRows:=0
+   if showMetrics && int(ws.Row)>=32 {netRows=min(8,max(3,int(ws.Row)/6));extra+=netRows+2}
    rows:=(int(ws.Row)-14-(len(clock)-1)-extra)/2
-   if rows>16{rows=16}
+   if rows>10{rows=10}
    var b strings.Builder
    b.WriteString("\x1b[H\x1b[36m")
    fmt.Fprintf(&b,"LOCKTTYUI // STANDBY\r\n")
@@ -214,6 +219,7 @@ func run()error{
    }else{fmt.Fprintf(&b,"CPU: %.1f%%\r\nMEM: %.1f%%\r\n",v,m)}
    if showMetrics {
     fmt.Fprintf(&b,"\r\n\x1b[1;36m// NETWORK\x1b[0m  RX %s  TX %s\r\n",rateText(rx),rateText(tx))
+    if netRows>0 && w>=20 {trafficGraph(&b,rh,th,w-5,netRows,*ascii,*sample)}
     storageLines(&b,volumes,int(ws.Col)-1,limit,*ascii)
    }
    b.WriteString("\r\nDISPLAY MODE")
