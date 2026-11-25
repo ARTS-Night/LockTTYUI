@@ -50,7 +50,7 @@ func parseServiceStatus(data string)[]statusItem{
 }
 func readServiceStatus()[]statusItem{
  var out []statusItem
- if _,err:=os.Stat("/usr/bin/systemctl");err==nil{
+ if _,err:=os.Stat("/run/systemd/system");err==nil{
   args:=[]string{"--system","--no-pager","show","--property=Id,LoadState,ActiveState"}
   for _,u:=range watchedUnits{args=append(args,u.unit)}
   ctx,cancel:=context.WithTimeout(context.Background(),time.Second)
@@ -98,6 +98,7 @@ func parseFailedCount(data string)(uint64,bool){
  return n,err==nil
 }
 func readFailedCount()(uint64,bool){
+ if _,err:=os.Stat("/run/systemd/system");err!=nil{return 0,false}
  ctx,cancel:=context.WithTimeout(context.Background(),time.Second)
  defer cancel()
  cmd:=exec.CommandContext(ctx,"/usr/bin/systemctl","--system","--no-pager","show","--property=NFailedUnits","--value")
