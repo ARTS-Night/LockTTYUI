@@ -36,11 +36,11 @@ func parseVMCounters(r io.Reader) (vmCounters,error) {
   n,err:=strconv.ParseUint(strings.TrimSpace(value),10,64)
   if err!=nil {continue}
   if idx<2 {
-   if n>math.MaxUint64/1024 {continue}
+   if n>^uint64(0)/1024 {continue}
    n*=1024
   }else{
    pageSize:=uint64(os.Getpagesize())
-   if n>math.MaxUint64/pageSize {continue}
+   if n>^uint64(0)/pageSize {continue}
    n*=pageSize
   }
   switch idx {
