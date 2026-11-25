@@ -43,7 +43,7 @@ func centerLine(s string,w int) string {
 func panel(lines []string,w int,ascii bool) []string {
  tl,tr,bl,br,h,v:="┌","┐","└","┘","─","│"
  if ascii{tl,tr,bl,br,h,v="+","+","+","+","-","|"}
- edge:="\x1b[0;34m"
+ edge:="\x1b[90m"
  out:=[]string{edge+tl+strings.Repeat(h,w-2)+tr+"\x1b[0m"}
  for _,line:=range lines {out=append(out,edge+v+"\x1b[0m "+fitLine(line,w-4)+" "+edge+v+"\x1b[0m")}
  return append(out,edge+bl+strings.Repeat(h,w-2)+br+"\x1b[0m")
@@ -60,13 +60,13 @@ func joinPanels(a,b []string,aw int) []string {
 }
 func percentText(v float64) string {if v<0{return "N/A"};return fmt.Sprintf("%.1f%%",v)}
 func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
- lines:=[]string{"\x1b[1;36m// STORAGE\x1b[0m"}
+ lines:=[]string{"\x1b[1;97m// STORAGE\x1b[0m"}
  if len(volumes)==0{return append(lines,"N/A")}
  for i,v:=range volumes {
   if i>=limit{break}
   if v.total==0{continue}
   p:=float64(v.used)/float64(v.total)
-  color:="6";if p>=.9{color="1"}else if p>=.8{color="3"}
+  color:="7";if p>=.9{color="1"}
   lines=append(lines,fmt.Sprintf("%-8s %s",v.label,percentText(p*100)),
    meter(p*100,max(1,w),color),
    fmt.Sprintf("%s / %s   FREE %s",sizeText(v.used),sizeText(v.total),sizeText(v.available)))
@@ -81,9 +81,9 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
  w:=min(512,width-1)
  height=min(256,height)
  if w<1||height<1{return "\x1b[H\x1b[J"}
- head:="\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"
+ head:="\x1b[1;97mLOCKTTYUI\x1b[0m  \x1b[90m/ SYSTEM TELEMETRY\x1b[0m"
  pulse:=systemIndicator(hw,ascii)
- if visibleWidth(head)+visibleWidth(pulse)+2>w{head="\x1b[1;36mLOCKTTYUI\x1b[0m"}
+ if visibleWidth(head)+visibleWidth(pulse)+2>w{head="\x1b[1;97mLOCKTTYUI\x1b[0m"}
  if visibleWidth(head)+visibleWidth(pulse)+2<=w{head+=strings.Repeat(" ",w-visibleWidth(head)-visibleWidth(pulse))+pulse}
  lines:=[]string{head}
  clock:=clockLines(now,w,height,ascii)
@@ -110,8 +110,9 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
    if detail>=1{coreLines=coreMeterLines(cores,pw-4,detail+1+max(0,(height-48)/12),cache)}
    if hw.cpu!=""{coreLines=append(coreLines,hw.cpu)}
    memLines:=memoryMeterLines(hw,pw-4,detail>=1)
+   memLines=append(memLines,memoryIOLines(hw.io,now,ascii,detail,pw-4)...)
    storage:=storagePanel(volumes,w-4,max(1,detail+max(0,(height-48)/12)),ascii)
-   storage=append(storage,fmt.Sprintf("I/O %s R %s  %s W %s",activityMark(dr,now,lastSample,ascii,"6"),rateText(dr),activityMark(dw,now,lastSample,ascii,"4"),rateText(dw)))
+   storage=append(storage,fmt.Sprintf("DISK I/O  %s   %s",hw.io.ioLabel(ioDiskRead,now,ascii,false,"READ"),hw.io.ioLabel(ioDiskWrite,now,ascii,true,"WRITE")))
    extra:=len(storage)+2
    if hw.gpu!=""&&detail>=1{extra+=4}
    status:=statusLines(hw.statuses,hw.docker,w-4,ascii,hw.checking)
@@ -132,14 +133,14 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     cpuRows,memRows:=rows+5+len(coreLines),rows+5+len(memLines)
     upperRows:=cpuRows+memRows
     if side{upperRows=max(cpuRows,memRows)}
-    networkRows:=rows+5
+    networkRows:=rows+6
     if upperRows+networkRows+extra+eventCost>budget{continue}
     var a,b,n strings.Builder
     graph:=graphKey{width:pw-9,rows:rows,ascii:ascii,period:period}
-    cpuGraph:=cache.graph(0,graph,func()[]string{var x strings.Builder;barHistory(&x,"",ch,pw-9,rows,ascii,period,0,"6");return splitLines(x.String())[1:]})
+    cpuGraph:=cache.graph(0,graph,func()[]string{var x strings.Builder;barHistory(&x,"",ch,pw-9,rows,ascii,period,0,"7");return splitLines(x.String())[1:]})
     memGraph:=cache.graph(1,graph,func()[]string{var x strings.Builder;stackedMemoryHistory(&x,mh,sh,pw-9,rows,ascii,period,hw);return splitLines(x.String())[1:]})
-    fmt.Fprintf(&a,"\x1b[1;36m// CPU (%d LOGICAL)\x1b[0m  %s",len(cores),percentText(cpuVal))
-    fmt.Fprintf(&b,"\x1b[1;34m// MEMORY\x1b[0m %s RAM+SWAP",percentText(combinedMemoryPercent(hw)))
+    fmt.Fprintf(&a,"\x1b[1;97m// CPU (%d LOGICAL)\x1b[0m  %s",len(cores),percentText(cpuVal))
+    fmt.Fprintf(&b,"\x1b[1;97m// MEMORY\x1b[0m %s RAM+SWAP",percentText(combinedMemoryPercent(hw)))
     al:=append([]string{a.String()},cpuGraph...)
     bl:=append([]string{b.String()},memGraph...)
     al=append(al,coreLines...)
@@ -148,11 +149,12 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
     candidate:=[]string{}
     if side{candidate=append(candidate,joinPanels(ap,bp,pw)...)}else{candidate=append(candidate,ap...);candidate=append(candidate,bp...)}
-    fmt.Fprintf(&n,"\x1b[1;36m// NETWORK\x1b[0m %s RX %s  %s TX %s\r\n",activityMark(rx,now,lastSample,ascii,"6"),rateText(rx),activityMark(tx,now,lastSample,ascii,"4"),rateText(tx))
+    fmt.Fprint(&n,"\x1b[1;97m// NETWORK\x1b[0m\r\n")
+    fmt.Fprintf(&n,"%s  %s\r\n",hw.io.ioLabel(ioNetRX,now,ascii,false,"DOWNLOAD"),hw.io.ioLabel(ioNetTX,now,ascii,true,"UPLOAD"))
     networkGraph:=cache.graph(2,graphKey{width:w-14,rows:rows,ascii:ascii,scale:netScale,period:period},func()[]string{var x strings.Builder;mirroredBars(&x,rh,th,w-14,rows,ascii,period,"RX","TX",netScale);return splitLines(x.String())})
     candidate=append(candidate,panel(append(splitLines(n.String()),networkGraph...),w,ascii)...)
     candidate=append(candidate,panel(storage,w,ascii)...)
-    if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;36m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
+    if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;97m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
     if detail>=1&&len(status)>0{candidate=append(candidate,panel(status,w,ascii)...)}
     if len(eventLines)>0{candidate=append(candidate,panel(eventLines,w,ascii)...)}
     if len(candidate)<=budget{lines=append(lines,candidate...);fitted=true;break}
@@ -176,11 +178,14 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
  return b.String()
 }
 
- // Use the existing rate samples: no extra collection or independent animation loop.
+ // Legacy activity glyph helper: use green or red for active I/O, grey for idle.
 func activityMark(rate float64,now,lastSample time.Time,ascii bool,color string)string{
- glyph:="●";if ascii{glyph="*"}
- if rate<0||lastSample.IsZero()||now.Sub(lastSample)>2*time.Second{return "\x1b[33m?\x1b[0m"}
- if rate>0&&now.Sub(lastSample)<150*time.Millisecond{return "\x1b[1;3"+color+"m"+glyph+"\x1b[0m"}
- glyph="○";if ascii{glyph="."}
- return "\x1b[0;37m"+glyph+"\x1b[0m"
+ mark:="●";if ascii{mark="*"}
+ if rate<0||lastSample.IsZero()||now.Sub(lastSample)>2*time.Second{return "\x1b[90m?\x1b[0m"}
+ if rate>0&&now.Sub(lastSample)<150*time.Millisecond{
+  sgr:="32";if color=="4"||color=="1"{sgr="31"}
+  return "\x1b["+sgr+"m"+mark+"\x1b[0m"
+ }
+ mark="○";if ascii{mark="."}
+ return "\x1b[90m"+mark+"\x1b[0m"
 }
