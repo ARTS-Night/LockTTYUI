@@ -38,4 +38,12 @@ Install the RPM matching the machine architecture with `sudo dnf install ./lockt
 Run `lockttyui --exhibit` as an ordinary user. Go is needed only on the build host.
 Docker, NVIDIA utilities and individual monitored services are optional. Systemd is recommended for service status; a failed query is not a healthy result.
 The build disables CGO and external Go module resolution. Verify the resulting ELF has no interpreter or NEEDED entries before release.
-A local RPM is not a hosted DNF repository. Repository signing, publishing and upgrade tests remain release gates.
+A local RPM is not a hosted DNF repository. Public DNF repository hosting and upgrade tests remain release gates.
+
+## GitHub build releases
+Only pushes to the build branch run CI. After successful tests and static ELF checks, CI creates an unsigned prerelease with the RPM and SHA256SUMS. Download both from the same release, then run:
+
+    sha256sum -c SHA256SUMS
+    sudo dnf install ./lockttyui-*.rpm
+
+If local RPM signature policy rejects this unsigned package, review the source and release provenance first; only then optionally use `sudo dnf --nogpgcheck install ./lockttyui-*.rpm` for this transaction. Never change global signature policy. A checksum downloaded with the RPM detects corruption but does not authenticate the publisher. Private repository access remains required while the repository is private.
