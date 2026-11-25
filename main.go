@@ -6,7 +6,6 @@ import (
  "bufio"
  "flag"
  "fmt"
- "math"
  "os"
  "os/signal"
  "strconv"
@@ -76,65 +75,13 @@ type historyBucket struct{sum float64; count int}
 func (b *historyBucket) add(v float64){if v>=0{b.sum+=v;b.count++}}
 func (b *historyBucket) take()float64{v:=-1.0;if b.count>0{v=b.sum/float64(b.count)};*b=historyBucket{};return v}
 
-// Each column represents a time bucket; connect consecutive valid samples.
-func plot(h []float64,w,rows int,ascii bool)[][]rune{
- g:=make([][]rune,rows)
- for y:=range g{g[y]=[]rune(strings.Repeat(" ",w))}
- if w<1||rows<2||len(h)==0{return g}
- prev:=-1
- for x:=0;x<w;x++{
-  lo,hi:=x*len(h)/w,(x+1)*len(h)/w
-  if hi<=lo{hi=lo+1}
-  if hi>len(h){hi=len(h)}
-  sum:=0.0
-  n:=0
-  for _,v:=range h[lo:hi]{if v>=0&&v<=100{sum+=v;n++}}
-  if n==0{prev=-1;continue}
-  y:=rows-1-int(math.Round(sum/float64(n)*float64(rows-1)/100))
-  if prev<0{
-   if ascii{g[y][x]='*'}else{g[y][x]='─'}
-  }else if prev==y{
-   if ascii{g[y][x]='-'}else{g[y][x]='─'}
-  }else{
-   top,bottom:=prev,y
-   if top>bottom{top,bottom=bottom,top}
-   for j:=top;j<=bottom;j++{if ascii{g[j][x]='|'}else{g[j][x]='│'}}
-   if ascii{g[prev][x]='+';g[y][x]='+'}else if y<prev{g[prev][x]='┘';g[y][x]='┌'}else{g[prev][x]='┐';g[y][x]='└'}
-  }
-  prev=y
- }
- return g
-}
-func graph(b *strings.Builder,name string,h []float64,w,rows int,ascii bool,period time.Duration,live ...float64){
- color:="36"
- if strings.HasPrefix(name,"MEMORY"){color="34"}
- v:=h[len(h)-1]
- if len(live)>0{v=live[0]}
- value:="N/A"
- if v>=0{value=fmt.Sprintf("%.1f%%",v)}
- fmt.Fprintf(b,"\x1b[1;%sm// %s\x1b[0m  %s\r\n",color,name,value)
- if w<1||rows<2{return}
- axis,corner,horizontal:="│","└","─"
- if ascii{axis,corner,horizontal="|","+","-"}
- g:=plot(h,w,rows,ascii)
- for y,row:=range g{
-  label:="   "
-  if y==0||y==rows-1||y==(rows-1)/2{label=fmt.Sprintf("%3d",int(math.Round(float64(rows-1-y)*100/float64(rows-1))))}
-  fmt.Fprintf(b,"\x1b[0;37m%s %s\x1b[1;%sm%s\r\n",label,axis,color,string(row))
- }
- fmt.Fprintf(b,"\x1b[0;37m    %s%s\r\n",corner,strings.Repeat(horizontal,w))
- left:=fmt.Sprintf("-%gs",float64(len(h))*period.Seconds())
- fmt.Fprintf(b,"     %s%sNOW\r\n",left,strings.Repeat(" ",max(1,w-len(left)-3)))
-}
 func run()error{
  exhibit:=flag.Bool("exhibit",false,"ignore keys except Ctrl+]")
  glyphTest:=flag.Bool("glyph-test",false,"print supported glyph candidates for visual inspection")
  ascii:=flag.Bool("ascii",false,"ASCII fallback")
  interval:=flag.Duration("interval",50*time.Millisecond,"display refresh interval (50ms to 5s)")
  sample:=flag.Duration("sample",250*time.Millisecond,"metric sample interval (100ms to 1s)")
- style:=flag.String("graph","bar","graph style: bar or line")
  flag.Parse()
- if *style!="bar"&&*style!="line"{return fmt.Errorf("graph must be bar or line")}
  if *glyphTest{fmt.Println("ASCII: + - | *\nUnicode: ─ │ ┌ ┐ └ ┘ ├ ┤\nOptional (not used): ▁ ▂ ▃ ▄ ▅ ▆ ▇ █ ⣿");return nil}
  if *interval<50*time.Millisecond||*interval>5*time.Second||*sample<100*time.Millisecond||*sample>time.Second{return fmt.Errorf("interval must be 50ms..5s; sample must be 100ms..1s")}
  tty,e:=os.OpenFile("/dev/tty",os.O_RDWR,0)
@@ -222,7 +169,6 @@ func run()error{
   if !now.Before(nextHistory){
    ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
    dh=push(dh,buckets[4].take());wh=push(wh,buckets[5].take())
-   for _,c:=range cores{c.history=push(c.history,c.bucket.take())}
    nextHistory=nextHistory.Add(time.Second)
    if !nextHistory.After(now){nextHistory=now.Add(time.Second)}
   }
@@ -237,7 +183,7 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dh,wh,dr,dw,*style)
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dh,wh,dr,dw)
    if frame!=lastFrame {
     if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
     lastFrame=frame
