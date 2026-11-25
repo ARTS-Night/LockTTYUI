@@ -33,16 +33,25 @@ jobs:
       - name: Clean DNF install and removal test
         run: |
           docker run --rm -v "$PWD/dist:/packages:ro" almalinux:9 bash -euxc '
+            stock_getty=$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)
             dnf -y --nogpgcheck --setopt=install_weak_deps=False install /packages/lockttyui-*.rpm
             rpm -q lockttyui
             rpm -qR lockttyui
             rpm -ql lockttyui
             test -f /usr/lib/systemd/system/lockttyui-preview.service
+            test -f /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            grep -Fxq "ExecStart=-/usr/bin/lockttyui --tty1-bridge" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            test ! -e /usr/lib/systemd/system/getty@tty2.service.d/50-lockttyui.conf
+            test ! -e /etc/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            test "$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)" = "$stock_getty"
+            systemd-analyze verify getty@tty1.service
             if systemctl is-enabled lockttyui-preview.service >/dev/null 2>&1; then exit 1; fi
             if rpm -q golang; then exit 1; fi
             /usr/bin/lockttyui --glyph-test
             dnf -y remove lockttyui
             test ! -e /usr/bin/lockttyui
+            test ! -e /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            test -f /usr/lib/systemd/system/getty@.service
           '
       - name: Verify static ELF and checksums
         run: |
@@ -74,4 +83,4 @@ jobs:
             echo "Release already exists; refusing to overwrite published assets."
             exit 1
           fi
-          gh release create "$tag" dist/*.rpm dist/SHA256SUMS --target "$GITHUB_SHA" --title "LockTTYUI build ${GITHUB_RUN_NUMBER}" --notes "Unsigned EL9 x86_64 RPM. Verify SHA256SUMS before installing. Login integration is not enabled automatically." --prerelease
+          gh release create "$tag" dist/*.rpm dist/SHA256SUMS --target "$GITHUB_SHA" --title "LockTTYUI build ${GITHUB_RUN_NUMBER}" --notes "UNSIGNED experimental EL9 x86_64 RPM. Verify SHA256SUMS. Installing automatically adds a getty@tty1-only vendor drop-in, effective on the next tty1 service start. Other consoles and SSH remain standard. Test in a disposable VM before deployment." --prerelease
