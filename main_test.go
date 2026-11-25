@@ -22,17 +22,9 @@ func TestHistory(t *testing.T) {
 		t.Fatal(h)
 	}
 }
-func TestPlot(t *testing.T) {
-	g := plot([]float64{0, 100, 100, 0}, 4, 3, false)
-	if string(g[0]) != " ┌─┐" || string(g[2]) != "─┘ └" {
-		t.Fatalf("%q / %q", string(g[0]), string(g[2]))
-	}
-	a := plot([]float64{-1, 0, 100}, 3, 3, true)
-	for _, row := range a {
-		for _, r := range row {
-			if r > 127 {
-				t.Fatal(r)
-			}
-		}
-	}
+func TestBarRows(t *testing.T) {
+ rows := barRows([]float64{0,100},2,2,100,false,true,"6")
+ if len(rows)!=2 {t.Fatal(rows)}
+ for _,row:=range rows {if visibleWidth(row)!=2 {t.Fatal(row)}}
+ if rows[0]!=" \x1b[46m \x1b[0m" {t.Fatalf("unexpected fill: %q",rows[0])}
 }
