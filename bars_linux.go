@@ -40,12 +40,28 @@ func barRows(h []float64,w,rows int,scale float64,invert,ascii bool,color string
 func barHistory(b *strings.Builder,name string,h []float64,w,rows int,ascii bool,period time.Duration,live float64,color string){
  fmt.Fprintf(b,"\x1b[1;3%sm// %s\x1b[0m  %s\r\n",color,name,percentText(live))
  for y,line:=range barRows(h,w,rows,100,false,ascii,color){
-  label:="";if y==0{label="100"}
+  label:=""
+  if y==0{label="100"}
+  if rows>=4&&y==rows/2{
+   label="50"
+   if strings.TrimSpace(line)==""{line=cpuReferenceLine(w,ascii)}
+  }
   fmt.Fprintf(b,"%3s |%s\r\n",label,line)
  }
  axis:="─";corner:="└";if ascii{axis="-";corner="+"}
  fmt.Fprintf(b,"%3s %s%s\r\n","0",corner,strings.Repeat(axis,w))
  timeAxis(b,w,5,len(h),period)
+}
+// One subdued mid-scale guide remains visible at zero CPU load without
+// faking any CPU use. Unlike a full grid, it does not compete with the bars.
+func cpuReferenceLine(w int,ascii bool)string{
+ var b strings.Builder
+ glyph:="·";if ascii{glyph="."}
+ b.Grow(w)
+ for x:=0;x<w;x++{
+  if x%4==0{b.WriteString(glyph)}else{b.WriteByte(' ')}
+ }
+ return "\x1b[90m"+b.String()+"\x1b[0m"
 }
 func timeAxis(b *strings.Builder,w,offset,n int,period time.Duration){
  left:=fmt.Sprintf("-%gs",float64(n)*period.Seconds())
