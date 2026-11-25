@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
       - name: Build RPM on AlmaLinux 9
@@ -45,7 +45,8 @@ jobs:
             test ! -e /usr/lib/systemd/system/getty@tty2.service.d/50-lockttyui.conf
             test ! -e /etc/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             test "$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)" = "$stock_getty"
-            systemd-analyze verify getty@tty1.service
+            # Container images omit man pages; check unit syntax without Documentation= lookup.
+            systemd-analyze --man=no verify getty@tty1.service
             if systemctl is-enabled lockttyui-preview.service >/dev/null 2>&1; then exit 1; fi
             if rpm -q golang; then exit 1; fi
             /usr/bin/lockttyui --glyph-test
