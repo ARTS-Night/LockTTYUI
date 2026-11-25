@@ -2,16 +2,19 @@
 
 RPM install is passive. No PAM, SSH, getty drop-ins, SELinux settings or persistent users are modified. The preview unit has no Install section and no automatic getty restart trigger.
 
-Only test on a disposable AlmaLinux VM with SSH and a separate console already available. Never target tty1, a logged-in console or a remote serial console. The examples use tty9 exclusively; first verify it is unused with loginctl and systemctl. Starting the preview conflicts with getty on that TTY, so it can stop that getty.
+Only test on a disposable AlmaLinux VM with SSH and a separate console already available. Never target tty1, a logged-in console or a remote serial console. The examples use tty9 exclusively; first verify it is unused with loginctl and systemctl. The fixed preview unit does not stop getty automatically. After verifying tty9 is unused, stop its getty explicitly from SSH.
 
 After installing the locally built RPM:
 
-    sudo systemctl start lockttyui-preview@tty9.service
+    sudo systemctl stop getty@tty9.service
+    sudo systemctl start lockttyui-preview.service
 
 Exit with Ctrl+] or stop from SSH. Restore explicitly:
 
-    sudo systemctl stop lockttyui-preview@tty9.service
+    sudo systemctl stop lockttyui-preview.service
     sudo systemctl start getty@tty9.service
+
+The package registers only the fixed tty9 preview unit. RPM scriptlets reload systemd metadata and stop the preview on final removal; no automatic enable or restart is requested. Before removal, stop the preview and restore getty manually. An older experimental template must be stopped manually before upgrading.
 
 No automatic pre-login cycle is installed. Do not enable this preview as a login replacement. Under PrivateNetwork network rates can be N/A; do not remove isolation merely to obtain network statistics.
 
