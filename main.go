@@ -80,7 +80,7 @@ func run()error{
  next:=time.Now()
  nextSample:=next.Add(*sample)
  v,m:=-1.0,-1.0
- volumes:=readVolumes()
+ var volumes []volume
  nextStorage:=next.Add(5*time.Second)
  info:=readSystemInfo()
  var lastSample time.Time
@@ -99,8 +99,8 @@ func run()error{
  var lastSwapKnown bool
  netScale:=rateScale{}
  netScale.update(1024)
- disks:=discoverDisks()
- diskPrev:=readDiskTraffic(disks)
+ var disks []string
+ var diskPrev map[string]traffic
  diskTime:=next
  dr,dw:=-1.0,-1.0
  events:=eventStream{}
@@ -125,6 +125,7 @@ func run()error{
   if stagedHardware!=nil&&!now.Before(scanUntil){
    result:=*stagedHardware
    result.ram,result.swapCapacity,result.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
+   volumes,disks=result.volumes,result.disks
    result.checking=false
    events.recordStatus(now,hw.statuses,result.statuses)
    if len(result.statuses)>0{events.add(now,"INFO","Service scan completed")}else{events.add(now,"INFO","No service status available")}
@@ -178,8 +179,6 @@ func run()error{
   }
   if !now.Before(nextInfo){info=readSystemInfo();revision++;nextInfo=now.Add(time.Second)}
   if !now.Before(nextStorage){
-   volumes=readVolumes()
-   disks=discoverDisks()
    if !hardwarePending{hardwarePending=true;hw.checking=true;events.add(now,"INFO","Checking system state");scanUntil=time.Now().Add(300*time.Millisecond);go func(){hardwareResults<-readHardware()}()}
    revision++
    nextStorage=now.Add(5*time.Second)
@@ -200,10 +199,17 @@ func run()error{
    }
    }
   }
-  n,e:=syscall.Read(int(fd),buf[:])
-  if e!=nil{return e}
-  for _,k:=range buf[:n]{if k==29||(!*exhibit&&(k=='q'||k==3)){return nil}}
-  time.Sleep(10*time.Millisecond)
+  deadline:=next
+  for _,at:=range []time.Time{nextSample,nextHistory,nextInfo,nextStorage}{if at.Before(deadline){deadline=at}}
+  if stagedHardware!=nil&&scanUntil.Before(deadline){deadline=scanUntil}
+  ready,err:=waitTTY(fd,min(50*time.Millisecond,max(0,time.Until(deadline))))
+  if err!=nil{return err}
+  if ready{
+   n,err:=syscall.Read(int(fd),buf[:])
+   if err==syscall.EINTR{continue};if err!=nil{return err}
+   if n==0{return nil}
+   for _,k:=range buf[:n]{if k==29||(!*exhibit&&(k=='q'||k==3)){return nil}}
+  }
  }
 }
 func main(){if e:=run();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}}
