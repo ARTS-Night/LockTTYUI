@@ -107,7 +107,8 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
    storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
    extra:=len(storage)+2
    if hw.gpu!=""&&detail>=1{extra+=4}
-   if hw.docker!=""&&detail>=2{extra++}
+   status:=statusLines(hw.statuses,hw.docker,w-4,ascii)
+   if detail>=1&&len(status)>0{extra+=len(status)+2}
    for rows:=10;rows>=2;rows--{
     cpuRows,memRows:=rows+5+len(coreLines),rows+5+len(memLines)
     upperRows:=cpuRows+memRows
@@ -129,7 +130,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     candidate=append(candidate,panel(splitLines(n.String()),w,ascii)...)
     candidate=append(candidate,panel(storage,w,ascii)...)
     if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;36m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
-    if hw.docker!=""&&detail>=2{candidate=append(candidate,hw.docker)}
+    if detail>=1&&len(status)>0{candidate=append(candidate,panel(status,w,ascii)...)}
     if len(candidate)<=budget{lines=append(lines,candidate...);fitted=true;break}
    }
   }
