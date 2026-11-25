@@ -48,5 +48,5 @@ func telemetryLine(info systemInfo,w int,now time.Time,lastSample time.Time) str
  if !lastSample.IsZero(){state="POLL";if now.Sub(lastSample)<150*time.Millisecond{state="READ"}}
  line:=fmt.Sprintf("UP %s  |  LOAD %s  |  TASKS %s  |  [%s]",info.uptime,info.load,info.tasks,state)
  if visibleWidth(line)>w {line=fmt.Sprintf("UP %s  |  LOAD %s",info.uptime,info.load)}
- return "\x1b[0;37m"+centerLine(line,w)+"\x1b[0m"
+ return "\x1b[90m"+centerLine(line,w)+"\x1b[0m"
 }
