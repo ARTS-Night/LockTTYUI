@@ -48,25 +48,9 @@ func cpuUsage(a,b cpu)float64{
  return 100*float64(d-i)/float64(d)
 }
 func memory()(float64,error){
- f,e:=os.Open("/proc/meminfo")
- if e!=nil{return -1,e}
- defer f.Close()
- s:=bufio.NewScanner(f)
- var total,avail uint64
- found:=false
- for s.Scan(){
-  a:=strings.Fields(s.Text())
-  if len(a)<2{continue}
-  switch a[0]{
-  case "MemTotal:":total,e=strconv.ParseUint(a[1],10,64)
-  case "MemAvailable:":avail,e=strconv.ParseUint(a[1],10,64);found=true
-  default:continue
-  }
-  if e!=nil{return -1,e}
- }
- if e=s.Err();e!=nil{return -1,e}
- if total==0||!found||avail>total{return -1,fmt.Errorf("invalid memory counters")}
- return 100*float64(total-avail)/float64(total),nil
+ ram,_,_:=readMemoryCapacity()
+ if ram.total==0{return -1,fmt.Errorf("invalid memory counters")}
+ return 100*float64(ram.used)/float64(ram.total),nil
 }
 func push(h []float64,v float64)[]float64{if len(h)>0{copy(h,h[1:]);h[len(h)-1]=v};return h}
 
@@ -155,8 +139,8 @@ func run()error{
    corePrev=coreNext
    hw.ram,hw.swapCapacity,hw.swapKnown=readMemoryCapacity()
    m=-1
-   if hw.ram.total>0{m=100*float64(hw.ram.used)/float64(hw.ram.total)}
-   if hw.ram.total>0{
+   if hw.ram.total>0&&hw.swapKnown{
+    m=combinedMemoryPercent(hw)
     if lastRamTotal!=hw.ram.total||lastSwapTotal!=hw.swapCapacity.total||lastSwapKnown!=hw.swapKnown{
      for i:=range mh{mh[i]=-1;sh[i]=-1}
      buckets[1]=historyBucket{};buckets[4]=historyBucket{}
