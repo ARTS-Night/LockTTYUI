@@ -77,27 +77,6 @@ func sizeText(n uint64) string {
  return fmt.Sprintf("%.1f%s",v,unit)
 }
 
-func storageLines(b *strings.Builder, volumes []volume, width, limit int, ascii bool) {
- b.WriteString("\x1b[1;36m// STORAGE\x1b[0m\r\n")
- if len(volumes)==0 {b.WriteString("N/A\r\n");return}
- for i,v:=range volumes {
-  if i>=limit {break}
-  p:=float64(v.used)/float64(v.total)
-  barWidth:=max(0,min(20,width-57))
-  full:=int(p*float64(barWidth)+0.5)
-  full=max(0,min(barWidth,full))
-  color:="36"
-  if p>=.9 {color="31"} else if p>=.8 {color="33"}
-  if barWidth>=5 {
-   on,off:="─"," "
-   if ascii {on,off="#","-"}
-   fmt.Fprintf(b,"%-7s \x1b[1;%sm[%s%s]\x1b[0m %5.1f%% %s/%s FREE %s\r\n",v.label,color,strings.Repeat(on,full),strings.Repeat(off,barWidth-full),p*100,sizeText(v.used),sizeText(v.total),sizeText(v.available))
-  } else {
-   fmt.Fprintf(b,"%-7s %5.1f%% FREE %s\r\n",v.label,p*100,sizeText(v.available))
-  }
- }
-}
-
 type traffic struct { rx,tx uint64 }
 func readTraffic() (map[string]traffic,error) {
  f,e:=os.Open("/proc/net/dev");if e!=nil{return nil,e};defer f.Close()
