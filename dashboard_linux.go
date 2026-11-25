@@ -86,7 +86,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
  if exhibit{footer="CONSOLE // STANDBY  |  Ctrl+] LOGIN"}
  cpuVal,memVal:=live[0],live[1]
  rx,tx:=live[2],live[3]
- compact:=[]string{fmt.Sprintf("CPU %s   MEMORY %s",percentText(cpuVal),percentText(memVal)),fmt.Sprintf("RX %s  TX %s",rateText(rx),rateText(tx))}
+ compact:=[]string{fmt.Sprintf("CPU %s   RAM+SWAP %s",percentText(cpuVal),percentText(memVal)),fmt.Sprintf("RX %s  TX %s",rateText(rx),rateText(tx))}
  if w<40||height<24 {
   lines=append([]string{"LOCKTTYUI",now.Format("15:04:05")},compact...)
   for _,v:=range volumes{if v.total>0{lines=append(lines,fmt.Sprintf("%s %s FREE %s",v.label,percentText(100*float64(v.used)/float64(v.total)),sizeText(v.available)));break}}
