@@ -3,6 +3,7 @@
 package main
 
 import (
+ "io"
  "strconv"
  "strings"
 )
@@ -38,4 +39,16 @@ func (w *frameWriter) full(s string)[]byte{
 func frameDelta(previous,current string,resize bool)string{
  var w frameWriter
  return string(w.delta(previous,current,resize))
+}
+
+ // Retry writes until every byte of a frame has been delivered to the terminal.
+func writeFull(dst io.Writer, data []byte) error {
+ for len(data)>0 {
+  n,err:=dst.Write(data)
+  if n<0||n>len(data){return io.ErrShortWrite}
+  data=data[n:]
+  if err!=nil{return err}
+  if n==0{return io.ErrShortWrite}
+ }
+ return nil
 }
