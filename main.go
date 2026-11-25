@@ -196,36 +196,7 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   w:=int(ws.Col)-7
-   if w>110{w=110}
-   clock:=clockLines(now,int(ws.Col)-1,int(ws.Row),*ascii)
-   limit:=min(3,max(1,(int(ws.Row)-20)/3))
-   showMetrics:=int(ws.Row)>=18 && int(ws.Col)>=40
-   extra:=0
-   if showMetrics {extra=4+max(1,min(limit,len(volumes)))}
-   netRows:=0
-   if showMetrics && int(ws.Row)>=32 {netRows=min(8,max(3,int(ws.Row)/6));extra+=netRows+2}
-   rows:=(int(ws.Row)-14-(len(clock)-1)-extra)/2
-   if rows>10{rows=10}
-   var b strings.Builder
-   b.WriteString("\x1b[H\x1b[36m")
-   fmt.Fprintf(&b,"LOCKTTYUI // STANDBY\r\n")
-   for _,line:=range clock{fmt.Fprintf(&b,"\x1b[1;36m%s\x1b[0m\r\n",line)}
-   fmt.Fprintf(&b,"\x1b[37m%s\r\n\r\n",now.Format("2006-01-02 Mon"))
-   if w>=20&&rows>=2{
-    graph(&b,"CPU / UTILIZATION",ch,w,rows,*ascii,*sample)
-    b.WriteString("\r\n")
-    graph(&b,"MEMORY / UTILIZATION",mh,w,rows,*ascii,*sample)
-   }else{fmt.Fprintf(&b,"CPU: %.1f%%\r\nMEM: %.1f%%\r\n",v,m)}
-   if showMetrics {
-    fmt.Fprintf(&b,"\r\n\x1b[1;36m// NETWORK\x1b[0m  RX %s  TX %s\r\n",rateText(rx),rateText(tx))
-    if netRows>0 && w>=20 {trafficGraph(&b,rh,th,w-5,netRows,*ascii,*sample)}
-    storageLines(&b,volumes,int(ws.Col)-1,limit,*ascii)
-   }
-   b.WriteString("\r\nDISPLAY MODE")
-   if !*exhibit{b.WriteString(" / q to exit")}
-   b.WriteString("\x1b[0m")
-   frame:=strings.ReplaceAll(b.String(),"\r\n","\x1b[K\r\n")+"\x1b[K\x1b[J"
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,*sample,ch,mh,rh,th,volumes)
    if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
   }
   n,e:=syscall.Read(int(fd),buf[:])
