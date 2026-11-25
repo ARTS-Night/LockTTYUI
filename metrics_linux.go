@@ -141,36 +141,3 @@ func trafficScale(rx,tx []float64) float64 {
  }
  return scale
 }
-func trafficGraph(b *strings.Builder,rx,tx []float64,w,rows int,ascii bool,period time.Duration,labels ...string) {
- first,second:="RX","TX"
- if len(labels)==2{first,second=labels[0],labels[1]}
- scale:=trafficScale(rx,tx)
- normalize:=func(h []float64)[]float64{
-  out:=make([]float64,len(h))
-  for i,v:=range h {if v<0{out[i]=-1}else{out[i]=100*v/scale}}
-  return out
- }
- a,c:=plot(normalize(rx),w,rows,ascii),plot(normalize(tx),w,rows,ascii)
- axis,corner,horizontal:="│","└","─"
- if ascii{axis,corner,horizontal="|","+","-"}
- for y:=range a {
-  label:=""
-  if y==0{label=sizeText(uint64(scale))}
-  if y==rows-1{label="0"}
-  fmt.Fprintf(b,"\x1b[0;37m%8s %s",label,axis)
-  for x:=range a[y] {
-   switch {
-   case a[y][x]!=' '&&c[y][x]!=' ':
-    g:=a[y][x]
-    if g!=c[y][x] {if ascii{g='+'}else{g='┼'}}
-    fmt.Fprintf(b,"\x1b[1;36m%c",g)
-   case a[y][x]!=' ':fmt.Fprintf(b,"\x1b[1;36m%c",a[y][x])
-   case c[y][x]!=' ':fmt.Fprintf(b,"\x1b[1;34m%c",c[y][x])
-   default:b.WriteByte(' ')
-   }
-  }
-  b.WriteString("\r\n")
- }
- fmt.Fprintf(b,"\x1b[0;37m         %s%s\r\n",corner,strings.Repeat(horizontal,w))
- fmt.Fprintf(b,"          -%gs  \x1b[1;36m%s\x1b[1;34m %s\x1b[0m  NOW\r\n",float64(len(rx))*period.Seconds(),first,second)
-}
