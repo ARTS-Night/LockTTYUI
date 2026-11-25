@@ -15,9 +15,10 @@ import (
 func barRows(h []float64,w,rows int,scale float64,invert,ascii bool,color string) []string {
  if w<=0||rows<=0{return nil}
  out:=make([]strings.Builder,rows)
- fullCell:="\x1b[4"+color+"m \x1b[0m"
+ bg,fg:=barPalette(color)
+ fullCell:="\x1b["+bg+"m \x1b[0m"
  glyph:="▄";if invert{glyph="▀"};if ascii{glyph="."}
- halfCell:="\x1b[3"+color+"m"+glyph+"\x1b[0m"
+ halfCell:="\x1b["+fg+"m"+glyph+"\x1b[0m"
  for x:=0;x<w;x++ {
   lo,hi:=x*len(h)/w,(x+1)*len(h)/w
   if hi<=lo{hi=min(len(h),lo+1)}
@@ -53,13 +54,13 @@ func timeAxis(b *strings.Builder,w,offset,n int,period time.Duration){
 // Same scale, separate halves, no overlapping characters.
 func mirroredBars(b *strings.Builder,a,z []float64,w,rows int,ascii bool,period time.Duration,first,second string,scale float64){
  upper:=max(1,rows/2);lower:=max(1,rows-upper)
- for y,line:=range barRows(a,w,upper,scale,false,ascii,"6"){
+ for y,line:=range barRows(a,w,upper,scale,false,ascii,"7"){
   label:="";if y==0{label=sizeText(uint64(scale))}
   fmt.Fprintf(b,"%8s |%s\r\n",label,line)
  }
  sep:="─";if ascii{sep="-"}
  fmt.Fprintf(b,"%8s +%s\r\n","0",strings.Repeat(sep,w))
- for y,line:=range barRows(z,w,lower,scale,true,ascii,"4"){
+ for y,line:=range barRows(z,w,lower,scale,true,ascii,"8"){
   label:="";if y==lower-1{label=sizeText(uint64(scale))}
   fmt.Fprintf(b,"%8s |%s\r\n",label,line)
  }
@@ -68,7 +69,8 @@ func mirroredBars(b *strings.Builder,a,z []float64,w,rows int,ascii bool,period 
 func meter(v float64,w int,color string)string{
  if v<0{return strings.Repeat("-",w)}
  n:=max(0,min(w,int(math.Round(v/100*float64(w)))))
- return "\x1b[4"+color+"m"+strings.Repeat(" ",n)+"\x1b[0;37m"+strings.Repeat(".",w-n)+"\x1b[0m"
+ bg,_:=barPalette(color)
+ return "\x1b["+bg+"m"+strings.Repeat(" ",n)+"\x1b[0;90m"+strings.Repeat("·",w-n)+"\x1b[0m"
 }
 func coreMeterLines(cores map[int]*coreSeries,width,budget int,caches ...*dashboardCache)[]string{
  if budget<=0||len(cores)==0{return nil}
@@ -85,7 +87,7 @@ func coreMeterLines(cores map[int]*coreSeries,width,budget int,caches ...*dashbo
   var b strings.Builder
   for j:=i;j<min(i+cols,limit);j++{
    c:=cores[ids[j]];v:=c.live
-   color:="6";if v>=90{color="1"}else if v>=80{color="3"}
+   color:="7";if v>=90{color="1"}
    value:=" N/A";if v>=0{value=fmt.Sprintf("%3.0f%%",v)}
    text:=fmt.Sprintf("C%03d %s %s",ids[j],value,meter(v,max(2,cell-11),color))
    b.WriteString(fitLine(text,cell))
@@ -101,12 +103,13 @@ func memoryMeterLines(hw hardwareInfo,width int,withBars bool)[]string{
  add:=func(label string,c capacity,color string){
   if c.total==0{return}
   p:=100*float64(c.used)/float64(c.total)
-  out=append(out,fmt.Sprintf("\x1b[1;3%sm%s\x1b[0m %s / %s",color,label,sizeText(c.used),sizeText(c.total)))
+  heading:="\x1b[1;97m";if color=="8"{heading="\x1b[90m"}
+  out=append(out,fmt.Sprintf("%s%s\x1b[0m %s / %s",heading,label,sizeText(c.used),sizeText(c.total)))
   if withBars{out=append(out,meter(p,max(1,width),color))}
  }
- add("RAM",hw.ram,"4")
+ add("RAM",hw.ram,"7")
  if hw.swapKnown{
-  if hw.swapCapacity.total==0{out=append(out,"SWAP OFF")}else{add("SWAP",hw.swapCapacity,"5")}
+  if hw.swapCapacity.total==0{out=append(out,"SWAP OFF")}else{add("SWAP",hw.swapCapacity,"8")}
  }else{out=append(out,"SWAP N/A")}
  return out
 }
@@ -116,8 +119,8 @@ func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
  if w<=0||rows<=0{return nil}
  out:=make([]strings.Builder,rows)
  // Six possible cells; precompute their escapes instead of formatting per pixel.
- cells:=[6]string{" ","\x1b[34m▄\x1b[0m","\x1b[35m▄\x1b[0m","\x1b[44m \x1b[0m","\x1b[45m \x1b[0m","\x1b[34;45m▄\x1b[0m"}
- if ascii{cells[5]="\x1b[35;44m=\x1b[0m";cells[1]="\x1b[34m.\x1b[0m";cells[2]="\x1b[35m.\x1b[0m"}
+ cells:=[6]string{" ","\x1b[37m▄\x1b[0m","\x1b[90m▄\x1b[0m","\x1b[47m \x1b[0m","\x1b[100m \x1b[0m","\x1b[37;100m▄\x1b[0m"}
+ if ascii{cells[5]="\x1b[37;100m=\x1b[0m";cells[1]="\x1b[37m.\x1b[0m";cells[2]="\x1b[90m.\x1b[0m"}
  n:=min(len(ram),len(swap))
  for x:=0;x<w;x++{
   lo,hi:=x*n/w,(x+1)*n/w
@@ -155,7 +158,7 @@ func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
 }
 func stackedMemoryHistory(b *strings.Builder,ram,swap []float64,w,rows int,ascii bool,period time.Duration,hw hardwareInfo){
  value:=percentText(combinedMemoryPercent(hw))
- fmt.Fprintf(b,"\x1b[1;34m// MEMORY\x1b[0m %s RAM+SWAP\r\n",value)
+ fmt.Fprintf(b,"\x1b[1;97m// MEMORY\x1b[0m %s RAM+SWAP\r\n",value)
  for y,line:=range stackedMemoryRows(ram,swap,w,rows,ascii){
   label:="";if y==0{label="100"}
   fmt.Fprintf(b,"%3s |%s\r\n",label,line)
@@ -163,4 +166,14 @@ func stackedMemoryHistory(b *strings.Builder,ram,swap []float64,w,rows int,ascii
  axis:="─";corner:="└";if ascii{axis="-";corner="+"}
  fmt.Fprintf(b,"%3s %s%s\r\n","0",corner,strings.Repeat(axis,w))
  timeAxis(b,w,5,len(ram),period)
+}
+
+// Monochrome bar foreground/background. Green and red are reserved for status.
+func barPalette(color string)(background,foreground string){
+ switch color {
+ case "1":return "41","31"  // Alert (red)
+ case "2":return "42","32"  // Healthy (green)
+ case "8":return "100","90" // Muted grey
+ default:return "47","37"  // White
+ }
 }
