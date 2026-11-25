@@ -78,7 +78,7 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
  return lines
 }
 
-func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dh,wh []float64,dr,dw float64,style string) string {
+func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dh,wh []float64,dr,dw float64) string {
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
  lines:=[]string{"\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"}
@@ -109,30 +109,25 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   remaining-=extras
   factor:=2;if side{factor=1}
   meterBudget:=0
-  if style=="bar"&&remaining>=22{meterBudget=min(4,max(0,(remaining-22)/4))}
+  if remaining>=22{meterBudget=min(4,max(0,(remaining-22)/4))}
   meters:=coreMeterLines(cores,pw-4,meterBudget)
   remaining-=len(meters)
   rows:=min(10,(remaining-storageRows-5-5*factor)/(factor+1))
   if rows>=2 {
    var a,b,n strings.Builder
-   if style=="line"{
-    coreGraph(&a,cores,ch,pw-9,rows,ascii,period,cpuVal)
-    graph(&b,"MEMORY",mh,pw-9,rows,ascii,period,memVal)
-   }else{
     barHistory(&a,fmt.Sprintf("CPU (%d LOGICAL)",len(cores)),ch,pw-9,rows,ascii,period,cpuVal,"6")
     barHistory(&b,"MEMORY",mh,pw-9,rows,ascii,period,memVal,"4")
-   }
    al,bl:=splitLines(a.String()),splitLines(b.String())
-   if style=="bar"{al=append(al,meters...);if side{for range meters{bl=append(bl,"")}}}
+   al=append(al,meters...);if side{for range meters{bl=append(bl,"")}}
    if hw.cpu!=""||hw.swap!=""{al=append(al,hw.cpu);bl=append(bl,hw.swap)}
    ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
    if side{lines=append(lines,joinPanels(ap,bp,pw)...)}else{lines=append(lines,ap...);lines=append(lines,bp...)}
    fmt.Fprintf(&n,"\x1b[1;36m// NETWORK RX %s\x1b[1;34m  TX %s\x1b[0m\r\n",rateText(rx),rateText(tx))
-   if style=="line"{trafficGraph(&n,rh,th,w-14,rows,ascii,period)}else{mirroredBars(&n,rh,th,w-14,rows,ascii,period,"RX","TX")}
+   mirroredBars(&n,rh,th,w-14,rows,ascii,period,"RX","TX")
    lines=append(lines,panel(splitLines(n.String()),w,ascii)...)
    if remaining-(rows+5)*(factor+1)-storageRows>=5 {
     var disk strings.Builder
-    if style=="line"{trafficGraph(&disk,dh,wh,w-14,3,ascii,period,"R","W")}else{mirroredBars(&disk,dh,wh,w-14,3,ascii,period,"R","W")}
+    mirroredBars(&disk,dh,wh,w-14,3,ascii,period,"R","W")
     storage=append(storage,splitLines(disk.String())...)
    }
    lines=append(lines,panel(storage,w,ascii)...)
