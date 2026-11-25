@@ -88,7 +88,8 @@ type activityPulse struct{
 }
 func (p *activityPulse) update(rate float64,now time.Time){
  p.known=rate>=0&&!math.IsNaN(rate)&&!math.IsInf(rate,0)
- if p.known&&rate>=1 {p.lastActive=now}
+ if !p.known {p.lastActive=time.Time{};return}
+ if rate>=1 {p.lastActive=now}
 }
 func (p activityPulse) active(now time.Time)bool{
  d:=now.Sub(p.lastActive)
