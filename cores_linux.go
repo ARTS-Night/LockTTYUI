@@ -15,14 +15,16 @@ type coreSeries struct {
  live float64
 }
 
-func parseCores(r io.Reader) map[int]cpu {
+func parseCPUSnapshot(r io.Reader) (cpu,map[int]cpu,bool) {
+ var total cpu
+ found:=false
  result:=map[int]cpu{}
  s:=bufio.NewScanner(r)
  for s.Scan(){
   f:=strings.Fields(s.Text())
-  if len(f)<9 || !strings.HasPrefix(f[0],"cpu") || f[0]=="cpu"{continue}
-  id,e:=strconv.Atoi(f[0][3:])
-  if e!=nil||id<0{continue}
+  if len(f)<9 || !strings.HasPrefix(f[0],"cpu") {continue}
+  id:=-1
+  if f[0]!="cpu"{var e error;id,e=strconv.Atoi(f[0][3:]);if e!=nil||id<0{continue}}
   var c cpu
   valid:=true
   for i:=1;i<=8;i++ {
@@ -31,9 +33,14 @@ func parseCores(r io.Reader) map[int]cpu {
    c.total+=v
    if i==4||i==5{c.idle+=v}
   }
-  if valid{result[id]=c}
+  if valid{if id<0{total=c;found=true}else{result[id]=c}}
  }
- return result
+ return total,result,found&&s.Err()==nil
+}
+func parseCores(r io.Reader)map[int]cpu{_,cores,_:=parseCPUSnapshot(r);return cores}
+func readCPUSnapshot()(cpu,map[int]cpu,bool){
+ f,e:=os.Open("/proc/stat");if e!=nil{return cpu{},nil,false};defer f.Close()
+ return parseCPUSnapshot(f)
 }
 func readCores() map[int]cpu {
  f,e:=os.Open("/proc/stat");if e!=nil{return nil};defer f.Close()
