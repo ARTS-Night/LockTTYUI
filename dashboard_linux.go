@@ -78,15 +78,15 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
  return lines
 }
 
-func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume) string {
+func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time) string {
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
- lines:=[]string{"\x1b[1;36mLOCKTTYUI // STANDBY\x1b[0m"}
+ lines:=[]string{"\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"}
  clock:=clockLines(now,w,height,ascii)
  lines=append(lines,clock...)
- lines=append(lines,centerLine(now.Format("2006-01-02 Mon"),w),"")
+ lines=append(lines,centerLine(now.Format("2006-01-02 Mon"),w),telemetryLine(info,w,now,lastSample),"")
  footer:="DISPLAY MODE / q to exit"
- if exhibit{footer="DISPLAY MODE / Ctrl+] LOGIN"}
+ if exhibit{footer="CONSOLE // STANDBY  |  Ctrl+] LOGIN"}
  cpuVal,memVal:=ch[len(ch)-1],mh[len(mh)-1]
  rx,tx:=rh[len(rh)-1],th[len(th)-1]
  compact:=[]string{fmt.Sprintf("CPU %s   MEMORY %s",percentText(cpuVal),percentText(memVal)),fmt.Sprintf("RX %s  TX %s",rateText(rx),rateText(tx))}
