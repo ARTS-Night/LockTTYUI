@@ -40,9 +40,11 @@ func barRows(h []float64,w,rows int,scale float64,invert,ascii bool,color string
 func barHistory(b *strings.Builder,name string,h []float64,w,rows int,ascii bool,period time.Duration,live float64,color string){
  fmt.Fprintf(b,"\x1b[1;3%sm// %s\x1b[0m  %s\r\n",color,name,percentText(live))
  for y,line:=range barRows(h,w,rows,100,false,ascii,color){
-  label:="";if y==0{label="100"};if y==rows-1{label="0"}
+  label:="";if y==0{label="100"}
   fmt.Fprintf(b,"%3s |%s\r\n",label,line)
  }
+ axis:="─";corner:="└";if ascii{axis="-";corner="+"}
+ fmt.Fprintf(b,"%3s %s%s\r\n","0",corner,strings.Repeat(axis,w))
  timeAxis(b,w,5,len(h),period)
 }
 func timeAxis(b *strings.Builder,w,offset,n int,period time.Duration){
@@ -102,7 +104,7 @@ func memoryMeterLines(hw hardwareInfo,width int,withBars bool)[]string{
  add("RAM",hw.ram,"4")
  if hw.swapKnown{
   if hw.swapCapacity.total==0{out=append(out,"SWAP OFF")}else{add("SWAP",hw.swapCapacity,"5")}
- }else if hw.swap!=""{out=append(out,hw.swap)}
+ }else{out=append(out,"SWAP N/A")}
  return out
 }
 
@@ -123,6 +125,12 @@ func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
    blue=int(math.Round(r/float64(count)*float64(rows*2)/100))
    total=int(math.Round((r+s)/float64(count)*float64(rows*2)/100))
    blue=min(rows*2,max(0,blue));total=min(rows*2,max(blue,total))
+   // Preserve visibility of nonzero swap at the expense of one half-cell
+   // of quantization; numeric labels remain exact.
+   if s>0&&total==blue{
+    if total<rows*2{total++}else{blue--}
+   }
+   if r>0&&blue==0&&total>=2{blue=1}
   }
   for y:=0;y<rows;y++{
    lower:=(rows-1-y)*2
@@ -141,15 +149,13 @@ func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
  lines:=make([]string,rows);for i:=range out{lines[i]=out[i].String()};return lines
 }
 func stackedMemoryHistory(b *strings.Builder,ram,swap []float64,w,rows int,ascii bool,period time.Duration,hw hardwareInfo){
- value:="N/A"
- if hw.ram.total>0{
-  total:=float64(hw.ram.total)+float64(hw.swapCapacity.total)
-  value=percentText(100*(float64(hw.ram.used)+float64(hw.swapCapacity.used))/total)
- }
+ value:=percentText(combinedMemoryPercent(hw))
  fmt.Fprintf(b,"\x1b[1;34m// MEMORY\x1b[0m %s RAM+SWAP\r\n",value)
  for y,line:=range stackedMemoryRows(ram,swap,w,rows,ascii){
   label:="";if y==0{label="100"};if y==rows-1{label="0"}
   fmt.Fprintf(b,"%3s |%s\r\n",label,line)
  }
+ axis:="─";corner:="└";if ascii{axis="-";corner="+"}
+ fmt.Fprintf(b,"%3s %s%s\r\n","0",corner,strings.Repeat(axis,w))
  timeAxis(b,w,5,len(ram),period)
 }
