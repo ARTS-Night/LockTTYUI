@@ -105,6 +105,9 @@ func run()error{
  hw:=hardwareInfo{}
  hardwareResults:=make(chan hardwareInfo,1)
  hardwarePending:=true
+ var stagedHardware *hardwareInfo
+ scanUntil:=time.Now().Add(300*time.Millisecond)
+ hw.checking=true
  go func(){hardwareResults<-readHardware()}()
  nextHistory:=next.Add(time.Second)
  var buf [128]byte
@@ -113,9 +116,14 @@ func run()error{
   now:=time.Now()
   select{
   case result:=<-hardwareResults:
-   result.ram,result.swapCapacity,result.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
-   hw=result;hardwarePending=false;revision++
+   stagedHardware=&result
   default:
+  }
+  if stagedHardware!=nil&&!now.Before(scanUntil){
+   result:=*stagedHardware
+   result.ram,result.swapCapacity,result.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
+   result.checking=false
+   hw=result;stagedHardware=nil;hardwarePending=false;revision++
   }
   if !now.Before(nextSample){
    nextSample=nextSample.Add(*sample)
@@ -162,7 +170,7 @@ func run()error{
   if !now.Before(nextStorage){
    volumes=readVolumes()
    disks=discoverDisks()
-   if !hardwarePending{hardwarePending=true;go func(){hardwareResults<-readHardware()}()}
+   if !hardwarePending{hardwarePending=true;hw.checking=true;scanUntil=time.Now().Add(300*time.Millisecond);go func(){hardwareResults<-readHardware()}()}
    revision++
    nextStorage=now.Add(5*time.Second)
   }
