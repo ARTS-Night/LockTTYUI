@@ -11,6 +11,8 @@ jobs:
   rpm:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,7 +33,7 @@ jobs:
       - name: Clean DNF install and removal test
         run: |
           docker run --rm -v "$PWD/dist:/packages:ro" almalinux:9 bash -euxc '
-            dnf -y --setopt=install_weak_deps=False install /packages/lockttyui-*.rpm
+            dnf -y --nogpgcheck --setopt=install_weak_deps=False install /packages/lockttyui-*.rpm
             rpm -q lockttyui
             rpm -qR lockttyui
             if rpm -q golang; then exit 1; fi
@@ -58,3 +60,14 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish unsigned RPM after successful checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-${GITHUB_RUN_NUMBER}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to overwrite published assets."
+            exit 1
+          fi
+          gh release create "$tag" dist/*.rpm dist/SHA256SUMS --target "$GITHUB_SHA" --title "LockTTYUI build ${GITHUB_RUN_NUMBER}" --notes "Unsigned EL9 x86_64 RPM. Verify SHA256SUMS before installing. Login integration is not enabled automatically." --prerelease
