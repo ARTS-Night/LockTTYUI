@@ -78,7 +78,7 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
  return lines
 }
 
-func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dh,wh []float64,dr,dw float64) string {
+func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dh,wh []float64,dr,dw float64,netScale,diskScale float64) string {
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
  lines:=[]string{"\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"}
@@ -94,47 +94,39 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   lines=append([]string{"LOCKTTYUI",now.Format("15:04:05")},compact...)
   for _,v:=range volumes{if v.total>0{lines=append(lines,fmt.Sprintf("%s %s FREE %s",v.label,percentText(100*float64(v.used)/float64(v.total)),sizeText(v.available)));break}}
  }else{
-  // Reserve footer and choose graph height from actual panel row costs.
+  // Fit complete panels, reducing optional detail before using compact mode.
   side:=w>=76
   pw:=w
   if side{pw=(w-2)/2}
-  remaining:=height-len(lines)-2
-  limit:=min(3,max(1,(remaining-15)/3))
-  storage:=storagePanel(volumes,w-4,limit,ascii)
-  storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
-  storageRows:=len(storage)+2
-  extras:=0
-  if hw.cpu!=""||hw.swap!=""{extras++}
-  if hw.gpu!=""{extras++}
-  remaining-=extras
-  factor:=2;if side{factor=1}
-  meterBudget:=0
-  if remaining>=22{meterBudget=min(4,max(0,(remaining-22)/4))}
-  meters:=coreMeterLines(cores,pw-4,meterBudget)
-  remaining-=len(meters)
-  rows:=min(10,(remaining-storageRows-5-5*factor)/(factor+1))
-  if rows>=2 {
-   var a,b,n strings.Builder
+  budget:=height-len(lines)-1
+  fitted:=false
+  for detail:=3;detail>=0&&!fitted;detail--{
+   for rows:=10;rows>=2;rows--{
+    var a,b,n,disk strings.Builder
     barHistory(&a,fmt.Sprintf("CPU (%d LOGICAL)",len(cores)),ch,pw-9,rows,ascii,period,cpuVal,"6")
     barHistory(&b,"MEMORY",mh,pw-9,rows,ascii,period,memVal,"4")
-   al,bl:=splitLines(a.String()),splitLines(b.String())
-   al=append(al,meters...);if side{for range meters{bl=append(bl,"")}}
-   if hw.cpu!=""||hw.swap!=""{al=append(al,hw.cpu);bl=append(bl,hw.swap)}
-   ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
-   if side{lines=append(lines,joinPanels(ap,bp,pw)...)}else{lines=append(lines,ap...);lines=append(lines,bp...)}
-   fmt.Fprintf(&n,"\x1b[1;36m// NETWORK RX %s\x1b[1;34m  TX %s\x1b[0m\r\n",rateText(rx),rateText(tx))
-   mirroredBars(&n,rh,th,w-14,rows,ascii,period,"RX","TX")
-   lines=append(lines,panel(splitLines(n.String()),w,ascii)...)
-   if remaining-(rows+5)*(factor+1)-storageRows>=5 {
-    var disk strings.Builder
-    mirroredBars(&disk,dh,wh,w-14,3,ascii,period,"R","W")
-    storage=append(storage,splitLines(disk.String())...)
+    al,bl:=splitLines(a.String()),splitLines(b.String())
+    if detail>=1{al=append(al,coreMeterLines(cores,pw-4,detail+1)...)}
+    if hw.cpu!=""{al=append(al,hw.cpu)}
+    if hw.swap!=""{bl=append(bl,hw.swap)}
+    if side{for len(al)<len(bl){al=append(al,"")};for len(bl)<len(al){bl=append(bl,"")}}
+    ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
+    candidate:=[]string{}
+    if side{candidate=append(candidate,joinPanels(ap,bp,pw)...)}else{candidate=append(candidate,ap...);candidate=append(candidate,bp...)}
+    fmt.Fprintf(&n,"\\x1b[1;36m// NETWORK RX %s\\x1b[1;34m  TX %s\\x1b[0m\\r\\n",rateText(rx),rateText(tx))
+    mirroredBars(&n,rh,th,w-14,rows,ascii,period,"RX","TX",netScale)
+    candidate=append(candidate,panel(splitLines(n.String()),w,ascii)...)
+    storage:=storagePanel(volumes,w-4,max(1,detail),ascii)
+    storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
+    if detail>=2{mirroredBars(&disk,dh,wh,w-14,4,ascii,period,"R","W",diskScale);storage=append(storage,splitLines(disk.String())...)}
+    candidate=append(candidate,panel(storage,w,ascii)...)
+    if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\\x1b[1;36m// GPU\\x1b[0m",hw.gpu},w,ascii)...)}
+    if len(candidate)<=budget{lines=append(lines,candidate...);fitted=true;break}
    }
-   lines=append(lines,panel(storage,w,ascii)...)
-   if hw.gpu!=""{lines=append(lines,"\x1b[1;36m// "+hw.gpu+"\x1b[0m")}
-  }else{
-   lines=append(lines,compact...)
-   lines=append(lines,panel(storage,w,ascii)...)
+  }
+  if !fitted{
+   lines=append([]string{"LOCKTTYUI",now.Format("15:04:05")},compact...)
+   if len(volumes)>0&&volumes[0].total>0{v:=volumes[0];lines=append(lines,fmt.Sprintf("ROOT %s FREE %s",percentText(100*float64(v.used)/float64(v.total)),sizeText(v.available)))}
   }
  }
  if len(lines)>=height{lines=lines[:max(0,height-1)]}
