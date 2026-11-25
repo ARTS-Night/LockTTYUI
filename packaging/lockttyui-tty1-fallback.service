@@ -1,0 +1,10 @@
+[Unit]
+Description=Stay with stock tty1 getty after dashboard failure
+After=lockttyui-tty1.service
+ConditionPathExists=!/run/lockttyui-tty1-removing
+StartLimitIntervalSec=20s
+StartLimitBurst=10
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lockttyui-tty1-route fallback

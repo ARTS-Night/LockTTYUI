@@ -1,0 +1,46 @@
+#!/bin/sh
+# Invoked only by root-owned systemd oneshot units. Fixed paths and verbs.
+set -eu
+umask 077
+state=/run
+systemctl=/usr/bin/systemctl
+token="$state/lockttyui-tty1-login.ready"
+fallback="$state/lockttyui-tty1-fallback"
+removing="$state/lockttyui-tty1-removing"
+
+[ ! -e "$removing" ] || exit 0
+
+case "${1:-}" in
+  handoff|fallback)
+    # Never queue a getty while the dashboard still owns the terminal.
+    current=$("$systemctl" show -p ActiveState --value lockttyui-tty1.service)
+    case "$current" in inactive|failed) ;; *) exit 0 ;; esac
+    if [ "$1" = fallback ]; then
+      : > "$fallback"
+    fi
+    : > "$token"
+    [ ! -e "$removing" ] || exit 0
+    "$systemctl" --no-block start getty@tty1.service
+    ;;
+  return)
+    # OnSuccess runs after the getty has exited. Keep its lease if a new
+    # login job is already active/activating (for example a manual start).
+    current=$("$systemctl" show -p ActiveState --value getty@tty1.service)
+    [ "$current" = inactive ] || exit 0
+    if [ -e "$fallback" ]; then
+      : > "$token"
+      # Bound rapid clean exits in fallback mode, without delaying normal logout.
+      sleep 1
+      [ ! -e "$removing" ] || exit 0
+      "$systemctl" --no-block start getty@tty1.service
+    else
+      rm -f "$token"
+      [ ! -e "$removing" ] || exit 0
+      "$systemctl" --no-block start lockttyui-tty1.service
+    fi
+    ;;
+  *)
+    echo "Unknown tty1 route" >&2
+    exit 2
+    ;;
+esac

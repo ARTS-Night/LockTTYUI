@@ -54,7 +54,7 @@ CPU, memory, swap, local storage, disk I/O, network, and optional hardware stati
 
 ## Safety
 
-Standalone exhibit mode is not a session lock. It returns to the invoking shell. The RPM provides a **TTY1-only** pre-login dashboard in its own unprivileged systemd service: Ctrl+] stops the dashboard, then systemd launches the unmodified distro agetty in its normal SELinux context. On logout, systemd starts the dashboard again. TTY2+ and SSH use unmodified standard login. No PAM changes, no Docker socket, no identity/address disclosure. The dashboard service runs as user nobody; SELinux Enforcing login/logout behavior and physical console handoff require VM validation.
+Standalone exhibit mode is not a session lock. It returns to the invoking shell. The RPM provides a **TTY1-only** pre-login dashboard in its own unprivileged systemd service: Ctrl+] stops the dashboard, then systemd launches the unmodified distro agetty in its normal SELinux context. On successful logout, systemd starts the dashboard again. A dashboard failure falls back to stock getty until the next boot; a failed getty retries after 3 seconds. A login lease is retained throughout the getty lifecycle, and the display never forcibly hangs up an occupied terminal. TTY2+ and SSH use unmodified standard login. No PAM changes, no Docker socket, no identity/address disclosure. The dashboard service runs as user nobody; SELinux Enforcing login/logout behavior and physical console handoff require VM validation.
 
 See packaging/OPERATIONS.md for automatic TTY1 integration, install/uninstall rollback, exact VM test steps and manual isolated tty9 preview. The preview is not a login replacement. PrivateNetwork can make preview network rates unavailable.
 
@@ -64,4 +64,4 @@ Development branch: responsive dashboard and separate TTY1 display/getty service
 
 ## Resource bounds
 
-Three single-entry graph caches, 60 samples per series and six events; caches are replaced on history changes and terminal resize. Hardware collection has one in-flight worker. No persistent monitoring database or cron job is installed. The RPM installs a TTY1-only getty drop-in, two handoff/display systemd services and a disabled tty9 preview unit; it never restarts an active login session during package installation. The preview service's memory and task limits are provisional and need measurement on real hardware.
+Three single-entry graph caches, 60 samples per series and six events; caches are replaced on history changes and terminal resize. Hardware collection has one in-flight worker. No persistent monitoring database or cron job is installed. The RPM installs a TTY1-only getty drop-in, a display service and three small routing services and a disabled tty9 preview unit; it never restarts an active login session during package installation. The preview service's memory and task limits are provisional and need measurement on real hardware.

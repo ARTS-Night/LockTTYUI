@@ -2,10 +2,13 @@
 Description=LockTTYUI pre-login telemetry on tty1
 Documentation=man:systemd.service(5)
 After=systemd-user-sessions.service plymouth-quit-wait.service getty-pre.target
+After=getty@tty1.service
 Before=getty.target
 ConditionPathExists=!/run/lockttyui-tty1-login.ready
+ConditionPathExists=!/run/lockttyui-tty1-fallback
+ConditionPathExists=!/run/lockttyui-tty1-removing
 OnSuccess=lockttyui-tty1-handoff.service
-OnFailure=lockttyui-tty1-handoff.service
+OnFailure=lockttyui-tty1-fallback.service
 StartLimitIntervalSec=20s
 StartLimitBurst=10
 
@@ -21,13 +24,15 @@ PrivateTmp=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
 LockPersonality=yes
-StandardInput=tty
+StandardInput=tty-fail
 StandardOutput=tty
 StandardError=journal
 TTYPath=/dev/tty1
-TTYReset=yes
-TTYVHangup=yes
-TTYVTDisallocate=yes
+# Never reset/hang up/disallocate a console that another session may own.
+# Go restores its own termios; stock agetty resets the console after a crash.
+TTYReset=no
+TTYVHangup=no
+TTYVTDisallocate=no
 ExecStart=/usr/bin/lockttyui --exhibit --tty-fd
 Restart=no
 TimeoutStopSec=3s

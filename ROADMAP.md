@@ -29,7 +29,7 @@ The temporary systemd experiment is not production-ready. The successful OnSucce
 
 ## v0.6 — distribution
 - RPM, DNF installation/removal, CI and release artifacts.
-- Installation must not enable a login modification by default.
+- RPM enables the TTY1-only dashboard on the next boot; first activation on an already running machine is explicit. No forced restart of an active login.
 
 ## Later
 Declarative templates and layout configuration; optional offline browser-based editor.

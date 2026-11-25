@@ -35,20 +35,42 @@ install -D -m 0644 packaging/lockttyui-preview.service %{buildroot}%{_unitdir}/l
 install -D -m 0644 packaging/50-lockttyui-tty1.conf %{buildroot}%{_unitdir}/getty@tty1.service.d/50-lockttyui.conf
 install -D -m 0644 packaging/lockttyui-tty1.service %{buildroot}%{_unitdir}/lockttyui-tty1.service
 install -D -m 0644 packaging/lockttyui-tty1-handoff.service %{buildroot}%{_unitdir}/lockttyui-tty1-handoff.service
+install -D -m 0644 packaging/lockttyui-tty1-fallback.service %{buildroot}%{_unitdir}/lockttyui-tty1-fallback.service
+install -D -m 0644 packaging/lockttyui-tty1-return.service %{buildroot}%{_unitdir}/lockttyui-tty1-return.service
+install -D -m 0755 packaging/lockttyui-tty1-route %{buildroot}%{_libexecdir}/lockttyui-tty1-route
 # Vendor dependency: do not create persistent enable links in /etc/systemd.
 install -d %{buildroot}%{_unitdir}/getty.target.wants
 ln -s ../lockttyui-tty1.service %{buildroot}%{_unitdir}/getty.target.wants/lockttyui-tty1.service
 
 %post
 %systemd_post lockttyui-preview.service
-# Reload the vendor drop-in without restarting an active login or replacing tty2+.
-if [ -d /run/systemd/system ]; then /usr/bin/systemctl daemon-reload >/dev/null 2>&1 || :; fi
+# Adopt a pre-existing stock getty (including builds 9-15, which consumed
+# their token at startup). Never stop/restart a live login during installation.
+if [ -d /run/systemd/system ]; then
+ seeded=0
+ state=$(/usr/bin/systemctl show -p ActiveState --value getty@tty1.service 2>/dev/null || :)
+ case "$state" in
+  active|activating|reloading)
+   if [ ! -e /run/lockttyui-tty1-login.ready ]; then
+    /usr/bin/touch /run/lockttyui-tty1-login.ready && seeded=1
+   fi
+   ;;
+ esac
+ /usr/bin/systemctl daemon-reload >/dev/null 2>&1 || :
+ # If the pre-existing getty exited during the reload, reconcile the lease.
+ if [ "$seeded" -eq 1 ] && [ "$(/usr/bin/systemctl show -p ActiveState --value getty@tty1.service 2>/dev/null || :)" = inactive ]; then
+  /usr/bin/systemctl --no-block start lockttyui-tty1-return.service >/dev/null 2>&1 || :
+ fi
+fi
 
 %preun
 %systemd_preun lockttyui-preview.service
 # Final removal only: stop a pre-login dashboard but never interrupt agetty or a logged-in user.
 if [ "$1" -eq 0 ] && [ -d /run/systemd/system ]; then
- /usr/bin/systemctl stop lockttyui-tty1.service >/dev/null 2>&1 || :
+ # Prevent any queued OnSuccess/OnFailure router from starting a replacement
+ # while the package is being erased. Keep this marker until daemon-reload.
+ /usr/bin/touch /run/lockttyui-tty1-removing || exit 1
+ /usr/bin/systemctl stop lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service lockttyui-tty1.service >/dev/null 2>&1 || :
 fi
 
 %postun
@@ -57,7 +79,7 @@ fi
 if [ -d /run/systemd/system ]; then
  /usr/bin/systemctl daemon-reload >/dev/null 2>&1 || :
  if [ "$1" -eq 0 ]; then
-  /usr/bin/rm -f /run/lockttyui-tty1-login.ready
+  /usr/bin/rm -f /run/lockttyui-tty1-login.ready /run/lockttyui-tty1-fallback /run/lockttyui-tty1-removing
   /usr/bin/systemctl --no-block start getty@tty1.service >/dev/null 2>&1 || :
  fi
 fi
@@ -67,6 +89,9 @@ fi
 %{_unitdir}/lockttyui-preview.service
 %{_unitdir}/lockttyui-tty1.service
 %{_unitdir}/lockttyui-tty1-handoff.service
+%{_unitdir}/lockttyui-tty1-return.service
+%{_unitdir}/lockttyui-tty1-fallback.service
+%{_libexecdir}/lockttyui-tty1-route
 %dir %{_unitdir}/getty.target.wants
 %{_unitdir}/getty.target.wants/lockttyui-tty1.service
 %dir %{_unitdir}/getty@tty1.service.d

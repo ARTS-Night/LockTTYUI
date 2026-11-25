@@ -1,0 +1,10 @@
+[Unit]
+Description=Return tty1 from stock login to dashboard or fallback
+After=getty@tty1.service
+ConditionPathExists=!/run/lockttyui-tty1-removing
+StartLimitIntervalSec=20s
+StartLimitBurst=10
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lockttyui-tty1-route return

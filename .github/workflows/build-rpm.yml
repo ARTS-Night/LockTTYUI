@@ -52,20 +52,26 @@ jobs:
             test -f /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             # The stock agetty MUST run as systemd ExecStart, not from LockTTYUI.
             ! grep -q "^ExecStart=" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
-            grep -Fxq "Restart=no" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
-            grep -Fxq "OnSuccess=lockttyui-tty1.service" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            grep -Fxq "Restart=on-failure" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            grep -Fxq "OnSuccess=lockttyui-tty1-return.service" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             grep -Fxq "ConditionPathExists=/run/lockttyui-tty1-login.ready" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             test -f /usr/lib/systemd/system/lockttyui-tty1.service
             test -f /usr/lib/systemd/system/lockttyui-tty1-handoff.service
             test -L /usr/lib/systemd/system/getty.target.wants/lockttyui-tty1.service
             grep -Fxq "User=nobody" /usr/lib/systemd/system/lockttyui-tty1.service
             grep -Fxq "OnSuccess=lockttyui-tty1-handoff.service" /usr/lib/systemd/system/lockttyui-tty1.service
-            grep -Fxq "ExecStartPost=/usr/bin/systemctl --no-block start getty@tty1.service" /usr/lib/systemd/system/lockttyui-tty1-handoff.service
+            grep -Fxq "ExecStart=/usr/libexec/lockttyui-tty1-route handoff" /usr/lib/systemd/system/lockttyui-tty1-handoff.service
+            grep -Fxq "OnFailure=lockttyui-tty1-fallback.service" /usr/lib/systemd/system/lockttyui-tty1.service
+            grep -Fxq "StandardInput=tty-fail" /usr/lib/systemd/system/lockttyui-tty1.service
+            grep -Fxq "TTYVHangup=no" /usr/lib/systemd/system/lockttyui-tty1.service
+            test -x /usr/libexec/lockttyui-tty1-route
+            test -f /usr/lib/systemd/system/lockttyui-tty1-return.service
+            test -f /usr/lib/systemd/system/lockttyui-tty1-fallback.service
             test ! -e /usr/lib/systemd/system/getty@tty2.service.d/50-lockttyui.conf
             test ! -e /etc/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             test "$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)" = "$stock_getty"
             # Container images omit man pages; check unit syntax without Documentation= lookup.
-            systemd-analyze --man=no verify getty@tty1.service lockttyui-tty1.service lockttyui-tty1-handoff.service
+            systemd-analyze --man=no verify getty@tty1.service lockttyui-tty1.service lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service
             # is-enabled returns success for static units on EL9; assert the actual state.
             preview_state=$(systemctl is-enabled lockttyui-preview.service 2>/dev/null || :)
             case "$preview_state" in static|disabled) ;; *) echo "Unexpected preview unit state: $preview_state"; exit 1;; esac
@@ -83,6 +89,9 @@ jobs:
             test ! -e /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             test ! -e /usr/lib/systemd/system/lockttyui-tty1.service
             test ! -e /usr/lib/systemd/system/lockttyui-tty1-handoff.service
+            test ! -e /usr/lib/systemd/system/lockttyui-tty1-return.service
+            test ! -e /usr/lib/systemd/system/lockttyui-tty1-fallback.service
+            test ! -e /usr/libexec/lockttyui-tty1-route
             test ! -e /usr/lib/systemd/system/getty.target.wants/lockttyui-tty1.service
             test -f /usr/lib/systemd/system/getty@.service
           '

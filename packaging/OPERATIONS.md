@@ -12,18 +12,24 @@ The corrected design uses two distinct services:
 
 1. `lockttyui-tty1.service` runs an unprivileged, read-only dashboard (nobody)
    using the open /dev/tty1; it never handles credentials.
-2. On Ctrl+] (or UI failure) `lockttyui-tty1-handoff.service` records a
+2. On Ctrl+] (normal UI exit) `lockttyui-tty1-handoff.service` records a
    temporary /run handoff token and starts `getty@tty1.service` through
    systemd. The default vendor `getty@.service` ExecStart is untouched,
    so **systemd starts the distribution agetty with its normal SELinux
    transition**. Passwords and shells use the normal PAM/SELinux path.
-3. A clean logout stops the getty service (Restart=no only for tty1);
-   OnSuccess starts `lockttyui-tty1.service` again.
+3. A clean logout triggers `lockttyui-tty1-return.service`, which removes the
+   login lease and starts the dashboard. An unsuccessful getty exit retries
+   stock getty after 3 seconds without handing the terminal to the dashboard.
+4. A dashboard failure triggers `lockttyui-tty1-fallback.service`: stock getty
+   remains the login interface for the rest of the boot (including clean logout).
+   The fallback and lease are root-owned files in /run. A reboot clears them.
+   The dashboard uses tty-fail and does not reset, hang up, or disallocate
+   an occupied terminal. During RPM removal all route helpers are suppressed.
 
 Only `getty@tty1.service` has an instance-specific vendor drop-in.
 The stock `getty@.service`, tty2+, SSH, and PAM remain unchanged.
 An ephemeral token at `/run/lockttyui-tty1-login.ready` gates getty
-startup so the two services do not claim the console simultaneously.
+startup and remains present while the login service owns tty1, including retries.
 The vendor symlink in `getty.target.wants` starts the dashboard on boot.
 Systemd is reloaded during install but an active user session is never
 restarted by the RPM.
@@ -93,13 +99,28 @@ To restore, run `sudo dmesg -n ORIGINAL_LEVEL` with the original first number.
 Avoid lowering the console log level on production systems where visible kernel
 warnings are an operational requirement.
 
+## Fallback recovery (TTY2 or SSH)
+
+After a dashboard crash, stock getty is intentionally retained until the next
+boot. To try the dashboard again without rebooting, first verify tty1 is
+vacant (no logged-in user). Do not stop a live login.
+
+    sudo rm -f /run/lockttyui-tty1-fallback
+    sudo systemctl reset-failed lockttyui-tty1.service getty@tty1.service lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service
+    sudo systemctl stop getty@tty1.service
+
+A successful getty stop normally triggers the return router. If no getty is
+running and no handoff is in progress, remove a stale login lease and start
+the dashboard explicitly. A broken stock getty or a locally overridden unit
+can still require administrative recovery; keep SSH or tty2 available.
+
 ## Diagnosis (TTY2 or SSH)
 
     rpm -q lockttyui
     getenforce
     systemctl cat getty@tty1.service
     systemctl status lockttyui-tty1.service lockttyui-tty1-handoff.service getty@tty1.service --no-pager
-    sudo journalctl -b -u lockttyui-tty1.service -u lockttyui-tty1-handoff.service -u getty@tty1.service -n 120 --no-pager
+    sudo journalctl -b -u lockttyui-tty1.service -u lockttyui-tty1-handoff.service -u lockttyui-tty1-return.service -u lockttyui-tty1-fallback.service -u getty@tty1.service -n 120 --no-pager
     sudo ausearch -m AVC,USER_AVC -ts recent
 
 Do not paste passwords, tokens, private system logs, or personal information
