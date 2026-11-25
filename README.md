@@ -9,9 +9,9 @@ Read-only Linux console telemetry dashboard. Go 1.23+, no third-party Go depende
     go build -o lockttyui .
     ./lockttyui --exhibit
 
-Bar graphs are the only graph style. Ctrl+] exits exhibit mode. Use --ascii for font compatibility, --glyph-test to inspect supported glyphs, --interval and --sample to tune the default 50ms display / 250ms sampling cadence. History uses one-second averages over 60 seconds.
+The dashboard uses a modern monochrome palette: black console background, white headings and graphs, grey frames and secondary data, and restrained green/red status indicators. No blue, cyan, magenta or yellow theme colors. Ctrl+] exits exhibit mode. Use --ascii for font compatibility, --glyph-test to inspect supported glyphs, --interval and --sample to tune the default 50ms display / 250ms sampling cadence. History uses one-second averages over 60 seconds.
 
-CPU, memory, swap, local storage, disk I/O, network, and optional hardware statistics are displayed subject to available screen space. Optional NVIDIA metrics use /usr/bin/nvidia-smi with a timeout; Docker counts are visible populated systemd cgroup scopes, not an authoritative container inventory.
+CPU, memory, swap, local storage, disk I/O, network, and optional hardware statistics are displayed subject to available screen space. NETWORK shows DOWNLOAD (RX) and UPLOAD (TX); STORAGE shows READ and WRITE. The MEMORY I/O section displays /proc/vmstat pgpgin/pgpgout in bytes/sec and swap page-in/page-out in bytes/sec. These are paging/storage-backed events, **not DRAM bandwidth**. Green signals inbound/read activity; red signals outbound/write activity; idle is grey and missing data is ?. A 900ms pulse hold prevents distracting flicker. The small icons update on the existing metric timer, not an additional render loop. Optional NVIDIA metrics use /usr/bin/nvidia-smi with a timeout; Docker counts are visible populated systemd cgroup scopes, not an authoritative container inventory.
 
 ## Safety
 
