@@ -22,5 +22,6 @@ func frameDelta(previous,current string,resize bool)string{
   if line==old[i]{continue}
   fmt.Fprintf(&b,"\x1b[%d;1H\x1b[0m%s",i+1,line)
  }
+ if b.Len()>=len(current){return current}
  return b.String()
 }
