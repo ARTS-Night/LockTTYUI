@@ -70,17 +70,25 @@ if [ "$1" -eq 0 ] && [ -d /run/systemd/system ]; then
  # Prevent any queued OnSuccess/OnFailure router from starting a replacement
  # while the package is being erased. Keep this marker until daemon-reload.
  /usr/bin/touch /run/lockttyui-tty1-removing || exit 1
- /usr/bin/systemctl stop lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service lockttyui-tty1.service >/dev/null 2>&1 || :
+ if ! /usr/bin/systemctl stop lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service lockttyui-tty1.service; then
+  /usr/bin/rm -f /run/lockttyui-tty1-removing
+  /usr/bin/systemctl --no-block start lockttyui-tty1-fallback.service >/dev/null 2>&1 || :
+  echo "Cannot stop LockTTYUI safely; refusing package removal." >&2
+  exit 1
+ fi
 fi
 
 %postun
 %systemd_postun lockttyui-preview.service
 # On final removal the original getty starts if idle; active tty1 login remains untouched.
 if [ -d /run/systemd/system ]; then
- /usr/bin/systemctl daemon-reload >/dev/null 2>&1 || :
- if [ "$1" -eq 0 ]; then
-  /usr/bin/rm -f /run/lockttyui-tty1-login.ready /run/lockttyui-tty1-fallback /run/lockttyui-tty1-removing
-  /usr/bin/systemctl --no-block start getty@tty1.service >/dev/null 2>&1 || :
+ if /usr/bin/systemctl daemon-reload; then
+  if [ "$1" -eq 0 ]; then
+   /usr/bin/rm -f /run/lockttyui-tty1-login.ready /run/lockttyui-tty1-fallback /run/lockttyui-tty1-removing
+   /usr/bin/systemctl --no-block start getty@tty1.service || echo "Start stock getty manually from SSH or tty2." >&2
+  fi
+ else
+  echo "systemd reload failed; run systemctl daemon-reload and restore tty1 from SSH or tty2." >&2
  fi
 fi
 
