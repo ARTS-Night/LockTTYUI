@@ -160,7 +160,10 @@ func trafficGraph(b *strings.Builder,rx,tx []float64,w,rows int,ascii bool,perio
   fmt.Fprintf(b,"\x1b[0;37m%8s %s",label,axis)
   for x:=range a[y] {
    switch {
-   case a[y][x]!=' '&&c[y][x]!=' ':fmt.Fprint(b,"\x1b[1;37m+")
+   case a[y][x]!=' '&&c[y][x]!=' ':
+    g:=a[y][x]
+    if g!=c[y][x] {if ascii{g='+'}else{g='┼'}}
+    fmt.Fprintf(b,"\x1b[1;36m%c",g)
    case a[y][x]!=' ':fmt.Fprintf(b,"\x1b[1;36m%c",a[y][x])
    case c[y][x]!=' ':fmt.Fprintf(b,"\x1b[1;34m%c",c[y][x])
    default:b.WriteByte(' ')
@@ -169,5 +172,5 @@ func trafficGraph(b *strings.Builder,rx,tx []float64,w,rows int,ascii bool,perio
   b.WriteString("\r\n")
  }
  fmt.Fprintf(b,"\x1b[0;37m         %s%s\r\n",corner,strings.Repeat(horizontal,w))
- fmt.Fprintf(b,"          -%gs  \x1b[1;36m%s\x1b[1;34m %s\x1b[0m  + overlap  NOW\r\n",float64(len(rx))*period.Seconds(),first,second)
+ fmt.Fprintf(b,"          -%gs  \x1b[1;36m%s\x1b[1;34m %s\x1b[0m  NOW\r\n",float64(len(rx))*period.Seconds(),first,second)
 }
