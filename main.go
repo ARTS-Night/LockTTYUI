@@ -71,6 +71,11 @@ func memory()(float64,error){
 }
 func push(h []float64,v float64)[]float64{return append(h[1:],v)}
 
+// Commit one averaged sample per fixed history interval.
+type historyBucket struct{sum float64; count int}
+func (b *historyBucket) add(v float64){if v>=0{b.sum+=v;b.count++}}
+func (b *historyBucket) take()float64{v:=-1.0;if b.count>0{v=b.sum/float64(b.count)};*b=historyBucket{};return v}
+
 // Each column represents a time bucket; connect consecutive valid samples.
 func plot(h []float64,w,rows int,ascii bool)[][]rune{
  g:=make([][]rune,rows)
@@ -100,10 +105,11 @@ func plot(h []float64,w,rows int,ascii bool)[][]rune{
  }
  return g
 }
-func graph(b *strings.Builder,name string,h []float64,w,rows int,ascii bool,period time.Duration){
+func graph(b *strings.Builder,name string,h []float64,w,rows int,ascii bool,period time.Duration,live ...float64){
  color:="36"
  if strings.HasPrefix(name,"MEMORY"){color="34"}
  v:=h[len(h)-1]
+ if len(live)>0{v=live[0]}
  value:="N/A"
  if v>=0{value=fmt.Sprintf("%.1f%%",v)}
  fmt.Fprintf(b,"\x1b[1;%sm// %s\x1b[0m  %s\r\n",color,name,value)
@@ -152,7 +158,7 @@ func run()error{
   fmt.Fprint(tty,"\x1b[0m\x1b[?25h\x1b[2J\x1b[H")
  }()
  fmt.Fprint(tty,"\x1b[?25l\x1b[2J")
- ch,mh:=make([]float64,int(time.Minute / *sample)),make([]float64,int(time.Minute / *sample))
+ ch,mh:=make([]float64,60),make([]float64,60)
  for i:=range ch{ch[i]=-1;mh[i]=-1}
  prev,pe:=readCPU()
  next:=time.Now()
@@ -169,6 +175,8 @@ func run()error{
  rx,tx:=-1.0,-1.0
  rh,th:=make([]float64,len(ch)),make([]float64,len(ch))
  for i:=range rh{rh[i]=-1;th[i]=-1}
+ var buckets [4]historyBucket
+ nextHistory:=next.Add(time.Second)
  var buf [128]byte
  for{
   select{case <-sig:return nil;default:}
@@ -180,17 +188,22 @@ func run()error{
    v=-1.0
    if pe==nil&&ce==nil{v=cpuUsage(prev,cur)}
    prev,pe=cur,ce
-   ch=push(ch,v)
+   buckets[0].add(v)
    var me error
    m,me=memory()
    if me!=nil{m=-1}
-   mh=push(mh,m)
+   buckets[1].add(m)
    netCur,ne:=readTraffic()
    rx,tx=-1,-1
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
    netPrev,netTime=netCur,now
-   rh=push(rh,rx);th=push(th,tx)
+   buckets[2].add(rx);buckets[3].add(tx)
    lastSample=now
+  }
+  if !now.Before(nextHistory){
+   ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
+   nextHistory=nextHistory.Add(time.Second)
+   if !nextHistory.After(now){nextHistory=now.Add(time.Second)}
   }
   if !now.Before(nextInfo){info=readSystemInfo();nextInfo=now.Add(time.Second)}
   if !now.Before(nextStorage){
@@ -202,7 +215,7 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,*sample,ch,mh,rh,th,volumes,info,lastSample)
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx})
    if frame!=lastFrame {
     if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
     lastFrame=frame
