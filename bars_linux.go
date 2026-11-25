@@ -112,8 +112,8 @@ func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
  if w<=0||rows<=0{return nil}
  out:=make([]strings.Builder,rows)
  // Six possible cells; precompute their escapes instead of formatting per pixel.
- cells:=map[string]string{"44":"\x1b[44m \x1b[0m","55":"\x1b[45m \x1b[0m","45":"\x1b[34;45m▄\x1b[0m","4":"\x1b[34m▄\x1b[0m","5":"\x1b[35m▄\x1b[0m","":" "}
- if ascii{cells["45"]="\x1b[35;44m=\x1b[0m";cells["4"]="\x1b[34m.\x1b[0m";cells["5"]="\x1b[35m.\x1b[0m"}
+ cells:=[6]string{" ","\x1b[34m▄\x1b[0m","\x1b[35m▄\x1b[0m","\x1b[44m \x1b[0m","\x1b[45m \x1b[0m","\x1b[34;45m▄\x1b[0m"}
+ if ascii{cells[5]="\x1b[35;44m=\x1b[0m";cells[1]="\x1b[34m.\x1b[0m";cells[2]="\x1b[35m.\x1b[0m"}
  n:=min(len(ram),len(swap))
  for x:=0;x<w;x++{
   lo,hi:=x*n/w,(x+1)*n/w
@@ -136,9 +136,15 @@ func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
   }
   for y:=0;y<rows;y++{
    lower:=(rows-1-y)*2
-   color:=func(level int)string{if level<blue{return "4"};if level<total{return "5"};return ""}
-   a,z:=color(lower),color(lower+1)
-   out[y].WriteString(cells[a+z])
+   idx:=0
+   switch {
+   case lower+1<blue:idx=3
+   case lower<blue&&lower+1<total:idx=5
+   case lower<blue:idx=1
+   case lower+1<total:idx=4
+   case lower<total:idx=2
+   }
+   out[y].WriteString(cells[idx])
   }
  }
  lines:=make([]string,rows);for i:=range out{lines[i]=out[i].String()};return lines
