@@ -48,6 +48,9 @@ func readDiskTraffic(disks []string,reuse ...map[string]traffic) map[string]traf
 type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool; statuses []statusItem; checking bool; events *eventStream; failedUnits uint64; failedKnown bool; volumes []volume; disks []string}
 type hardwareCollector struct{
  discovered time.Time
+ failedChecked time.Time
+ failedUnits uint64
+ failedKnown bool
  mounts,disks,freq,temps,cards []string
  nvidia bool
 }
@@ -97,7 +100,11 @@ func (c *hardwareCollector) read() hardwareInfo{
  if h.gpu==""&&c.nvidia{h.gpu=readNVIDIA()}
  h.docker=readDockerSummary()
  h.statuses=readServiceStatus()
- h.failedUnits,h.failedKnown=readFailedCount()
+ if c.failedChecked.IsZero()||now.Sub(c.failedChecked)>=15*time.Second{
+  c.failedUnits,c.failedKnown=readFailedCount()
+  c.failedChecked=now
+ }
+ h.failedUnits,h.failedKnown=c.failedUnits,c.failedKnown
  return h
 }
 
