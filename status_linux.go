@@ -118,4 +118,5 @@ func systemIndicator(hw hardwareInfo,ascii bool)string{
  }
  return fmt.Sprintf("\x1b[%sm%s SYSTEM | %s\x1b[0m",statusColor(color),mark,state)
 }
-\nfunc statusColor(color string)string{if color=="2"{return "32"};if color=="1"{return "31"};return "90"}\n
+
+func statusColor(color string)string{if color=="2"{return "32"};if color=="1"{return "31"};return "90"}
