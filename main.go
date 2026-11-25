@@ -152,9 +152,9 @@ func run()error{
    coreNext:=readCores()
    updateCores(cores,corePrev,coreNext)
    corePrev=coreNext
-   var me error
-   m,me=memory()
-   if me!=nil{m=-1}
+   hw.ram,hw.swapCapacity,hw.swapKnown=readMemoryCapacity()
+   m=-1
+   if hw.ram.total>0{m=100*float64(hw.ram.used)/float64(hw.ram.total)}
    buckets[1].add(m)
    netCur,ne:=readTraffic()
    rx,tx=-1,-1
@@ -178,7 +178,9 @@ func run()error{
   if !now.Before(nextInfo){info=readSystemInfo();nextInfo=now.Add(time.Second)}
   if !now.Before(nextStorage){
    volumes=readVolumes()
-   hw=readHardware()
+   nextHW:=readHardware()
+   nextHW.ram,nextHW.swapCapacity,nextHW.swapKnown=hw.ram,hw.swapCapacity,hw.swapKnown
+   hw=nextHW
    nextStorage=now.Add(5*time.Second)
   }
   if !now.Before(next){
