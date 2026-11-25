@@ -21,8 +21,10 @@ func parseCPUSnapshot(r io.Reader) (cpu,map[int]cpu,bool) {
  result:=map[int]cpu{}
  s:=bufio.NewScanner(r)
  for s.Scan(){
-  f:=strings.Fields(s.Text())
-  if len(f)<9 || !strings.HasPrefix(f[0],"cpu") {continue}
+  line:=s.Text()
+  if !strings.HasPrefix(line,"cpu"){continue}
+  f:=strings.Fields(line)
+  if len(f)<9 {continue}
   id:=-1
   if f[0]!="cpu"{var e error;id,e=strconv.Atoi(f[0][3:]);if e!=nil||id<0{continue}}
   var c cpu
