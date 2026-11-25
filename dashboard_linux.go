@@ -98,14 +98,28 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   budget:=height-len(lines)-1
   fitted:=false
   for detail:=3;detail>=0&&!fitted;detail--{
+   // Calculate the exact panel cost before rendering any history.
+   coreLines:=[]string{}
+   if detail>=1{coreLines=coreMeterLines(cores,pw-4,detail+1)}
+   if hw.cpu!=""{coreLines=append(coreLines,hw.cpu)}
+   memLines:=memoryMeterLines(hw,pw-4,detail>=1)
+   storage:=storagePanel(volumes,w-4,max(1,detail),ascii)
+   storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
+   extra:=len(storage)+2
+   if hw.gpu!=""&&detail>=1{extra+=4}
+   if hw.docker!=""&&detail>=2{extra++}
    for rows:=10;rows>=2;rows--{
+    cpuRows,memRows:=rows+5+len(coreLines),rows+5+len(memLines)
+    upperRows:=cpuRows+memRows
+    if side{upperRows=max(cpuRows,memRows)}
+    networkRows:=2*max(1,rows/2)+5
+    if upperRows+networkRows+extra>budget{continue}
     var a,b,n strings.Builder
     barHistory(&a,fmt.Sprintf("CPU (%d LOGICAL)",len(cores)),ch,pw-9,rows,ascii,period,cpuVal,"6")
     stackedMemoryHistory(&b,mh,sh,pw-9,rows,ascii,period,hw)
     al,bl:=splitLines(a.String()),splitLines(b.String())
-    if detail>=1{al=append(al,coreMeterLines(cores,pw-4,detail+1)...)}
-    if hw.cpu!=""{al=append(al,hw.cpu)}
-    bl=append(bl,memoryMeterLines(hw,pw-4,detail>=1)... )
+    al=append(al,coreLines...)
+    bl=append(bl,memLines...)
     if side{for len(al)<len(bl){al=append(al,"")};for len(bl)<len(al){bl=append(bl,"")}}
     ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
     candidate:=[]string{}
@@ -113,8 +127,6 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     fmt.Fprintf(&n,"\x1b[1;36m// NETWORK RX %s\x1b[1;34m  TX %s\x1b[0m\r\n",rateText(rx),rateText(tx))
     mirroredBars(&n,rh,th,w-14,rows,ascii,period,"RX","TX",netScale)
     candidate=append(candidate,panel(splitLines(n.String()),w,ascii)...)
-    storage:=storagePanel(volumes,w-4,max(1,detail),ascii)
-    storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
     candidate=append(candidate,panel(storage,w,ascii)...)
     if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;36m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
     if hw.docker!=""&&detail>=2{candidate=append(candidate,hw.docker)}
