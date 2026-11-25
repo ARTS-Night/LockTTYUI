@@ -47,7 +47,11 @@ jobs:
             test "$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)" = "$stock_getty"
             # Container images omit man pages; check unit syntax without Documentation= lookup.
             systemd-analyze --man=no verify getty@tty1.service
-            if systemctl is-enabled lockttyui-preview.service >/dev/null 2>&1; then exit 1; fi
+            # is-enabled returns success for static units on EL9; assert the actual state.
+            preview_state=$(systemctl is-enabled lockttyui-preview.service 2>/dev/null || :)
+            case "$preview_state" in static|disabled) ;; *) echo "Unexpected preview unit state: $preview_state"; exit 1;; esac
+            test ! -e /etc/systemd/system/multi-user.target.wants/lockttyui-preview.service
+            test ! -e /etc/systemd/system/getty.target.wants/lockttyui-preview.service
             if rpm -q golang; then exit 1; fi
             /usr/bin/lockttyui --glyph-test
             dnf -y remove lockttyui
