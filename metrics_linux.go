@@ -132,3 +132,40 @@ func rateText(n float64) string {
  if n<0{return "N/A"}
  return sizeText(uint64(n))+"/s"
 }
+
+ // trafficScale selects a shared power-of-two ceiling, with a 1 KiB/s minimum.
+func trafficScale(rx,tx []float64) float64 {
+ scale:=1024.0
+ for _,series:=range [][]float64{rx,tx} {
+  for _,v:=range series {for v>scale {scale*=2}}
+ }
+ return scale
+}
+func trafficGraph(b *strings.Builder,rx,tx []float64,w,rows int,ascii bool,period time.Duration) {
+ scale:=trafficScale(rx,tx)
+ normalize:=func(h []float64)[]float64{
+  out:=make([]float64,len(h))
+  for i,v:=range h {if v<0{out[i]=-1}else{out[i]=100*v/scale}}
+  return out
+ }
+ a,c:=plot(normalize(rx),w,rows,ascii),plot(normalize(tx),w,rows,ascii)
+ axis,corner,horizontal:="│","└","─"
+ if ascii{axis,corner,horizontal="|","+","-"}
+ for y:=range a {
+  label:=""
+  if y==0{label=sizeText(uint64(scale))}
+  if y==rows-1{label="0"}
+  fmt.Fprintf(b,"\x1b[0;37m%8s %s",label,axis)
+  for x:=range a[y] {
+   switch {
+   case a[y][x]!=' '&&c[y][x]!=' ':fmt.Fprint(b,"\x1b[1;37m+")
+   case a[y][x]!=' ':fmt.Fprintf(b,"\x1b[1;36m%c",a[y][x])
+   case c[y][x]!=' ':fmt.Fprintf(b,"\x1b[1;34m%c",c[y][x])
+   default:b.WriteByte(' ')
+   }
+  }
+  b.WriteString("\r\n")
+ }
+ fmt.Fprintf(b,"\x1b[0;37m         %s%s\r\n",corner,strings.Repeat(horizontal,w))
+ fmt.Fprintf(b,"          -%gs  \x1b[1;36mRX\x1b[1;34m TX\x1b[0m  + overlap  NOW\r\n",float64(len(rx))*period.Seconds())
+}
