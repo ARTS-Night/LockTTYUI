@@ -83,15 +83,18 @@ func sizeText(n uint64) string {
 }
 
 type traffic struct { rx,tx uint64 }
-func readTraffic(reuse ...map[string]traffic) (map[string]traffic,error) {
+func readTraffic(reuse ...map[string]traffic) (map[string]traffic,error) {return readTrafficBuffer(nil,reuse...)}
+func readTrafficBuffer(buffer []byte,reuse ...map[string]traffic) (map[string]traffic,error) {
  f,e:=os.Open("/proc/net/dev");if e!=nil{if len(reuse)>0&&reuse[0]!=nil{clear(reuse[0]);return reuse[0],e};return nil,e};defer f.Close()
- return parseTraffic(f,reuse...)
+ return parseTrafficBuffer(f,buffer,reuse...)
 }
-func parseTraffic(r io.Reader,reuse ...map[string]traffic) (map[string]traffic,error) {
+func parseTraffic(r io.Reader,reuse ...map[string]traffic) (map[string]traffic,error) {return parseTrafficBuffer(r,nil,reuse...)}
+func parseTrafficBuffer(r io.Reader,buffer []byte,reuse ...map[string]traffic) (map[string]traffic,error) {
  var out map[string]traffic
  if len(reuse)>0{out=reuse[0]}
  if out==nil{out=make(map[string]traffic)}else{clear(out)}
  s:=bufio.NewScanner(r)
+ if buffer!=nil{s.Buffer(buffer,65536)}
  for s.Scan() {
   name,rest,ok:=strings.Cut(s.Text(),":")
   if !ok {continue}
