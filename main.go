@@ -105,6 +105,7 @@ func run()error{
  var lastSample time.Time
  nextInfo:=next.Add(time.Second)
  lastFrame:=""
+ var lastFullRepaint time.Time
  writer:=frameWriter{}
  var lastRenderKey struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}
  var revision uint64
@@ -228,14 +229,19 @@ func run()error{
     sizeDirty=false;lastSizeCheck=now
    }
    key:=struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}{ws.Row,ws.Col,now.Unix(),lastSample,!lastSample.IsZero()&&now.Sub(lastSample)<150*time.Millisecond,revision}
-   if key!=lastRenderKey||lastFrame==""{
+   repair:=screenRepairDue(now,lastFullRepaint)
+   if key!=lastRenderKey||lastFrame==""||repair{
    resized:=key.row!=lastRenderKey.row||key.col!=lastRenderKey.col
    if resized{cache.invalidate();writer.scratch=nil}
    lastRenderKey=key
    frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,sh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value,&cache)
-   if frame!=lastFrame||resized {
-    if e=writeFull(output,writer.delta(lastFrame,frame,resized));e!=nil{return e}
+   if frame!=lastFrame||resized||repair {
+    // Console printk can modify physical cells while the cached frame remains
+    // unchanged. Refresh the entire display periodically without clearing it.
+    forceFull:=resized||repair
+    if e=writeFull(output,writer.delta(lastFrame,frame,forceFull));e!=nil{return e}
     lastFrame=frame
+    if forceFull{lastFullRepaint=now}
    }
    }
   }
