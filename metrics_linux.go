@@ -25,11 +25,15 @@ func filesystemCapacity(path string) (capacity, error) {
  return capacity{s.Blocks*size,(s.Blocks-s.Bfree)*size,s.Bavail*size},nil
 }
 
-func readVolumes() []volume {
+func discoverMountPaths() []string {
  // Root is always measured; extra local mounts are opt-in by discovery below.
  data,err:=os.ReadFile("/proc/self/mountinfo")
  paths:=[]string{"/"}
  if err==nil {paths=mountPaths(string(data))}
+ return paths
+}
+func readVolumes() []volume{return readVolumePaths(discoverMountPaths())}
+func readVolumePaths(paths []string) []volume {
  result:=make([]volume,0,len(paths))
  for _,path:=range paths {
   c,e:=filesystemCapacity(path)
