@@ -66,19 +66,16 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
   if i>=limit{break}
   if v.total==0{continue}
   p:=float64(v.used)/float64(v.total)
-  color:="36";if p>=.9{color="31"}else if p>=.8{color="33"}
-  bar:=max(1,w-2)
-  full:=min(bar,max(0,int(p*float64(bar)+.5)))
-  on,off:="─","·";if ascii{on,off="#","-"}
+  color:="6";if p>=.9{color="1"}else if p>=.8{color="3"}
   lines=append(lines,fmt.Sprintf("%-8s %s",v.label,percentText(p*100)),
-   fmt.Sprintf("\x1b[1;%sm[%s\x1b[0;37m%s\x1b[1;%sm]\x1b[0m",color,strings.Repeat(on,full),strings.Repeat(off,bar-full),color),
+   meter(p*100,max(1,w),color),
    fmt.Sprintf("%s / %s   FREE %s",sizeText(v.used),sizeText(v.total),sizeText(v.available)))
  }
  if len(volumes)>limit{lines=append(lines,fmt.Sprintf("+%d more volumes",len(volumes)-limit))}
  return lines
 }
 
-func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dh,wh []float64,dr,dw float64,netScale,diskScale float64) string {
+func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dr,dw float64,netScale float64) string {
  w:=min(140,width-1)
  if w<1||height<1{return "\x1b[H\x1b[J"}
  lines:=[]string{"\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"}
@@ -102,7 +99,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   fitted:=false
   for detail:=3;detail>=0&&!fitted;detail--{
    for rows:=10;rows>=2;rows--{
-    var a,b,n,disk strings.Builder
+    var a,b,n strings.Builder
     barHistory(&a,fmt.Sprintf("CPU (%d LOGICAL)",len(cores)),ch,pw-9,rows,ascii,period,cpuVal,"6")
     barHistory(&b,"MEMORY",mh,pw-9,rows,ascii,period,memVal,"4")
     al,bl:=splitLines(a.String()),splitLines(b.String())
@@ -118,7 +115,6 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     candidate=append(candidate,panel(splitLines(n.String()),w,ascii)...)
     storage:=storagePanel(volumes,w-4,max(1,detail),ascii)
     storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
-    if detail>=2{mirroredBars(&disk,dh,wh,w-14,4,ascii,period,"R","W",diskScale);storage=append(storage,splitLines(disk.String())...)}
     candidate=append(candidate,panel(storage,w,ascii)...)
     if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;36m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
     if hw.docker!=""&&detail>=2{candidate=append(candidate,hw.docker)}
