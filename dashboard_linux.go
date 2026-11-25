@@ -111,7 +111,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
    if hw.cpu!=""{coreLines=append(coreLines,hw.cpu)}
    memLines:=memoryMeterLines(hw,pw-4,detail>=1)
    storage:=storagePanel(volumes,w-4,max(1,detail+max(0,(height-48)/12)),ascii)
-   storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
+   storage=append(storage,fmt.Sprintf("I/O %s R %s  %s W %s",activityMark(dr,now,lastSample,ascii,"6"),rateText(dr),activityMark(dw,now,lastSample,ascii,"4"),rateText(dw)))
    extra:=len(storage)+2
    if hw.gpu!=""&&detail>=1{extra+=4}
    status:=statusLines(hw.statuses,hw.docker,w-4,ascii,hw.checking)
@@ -148,7 +148,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     ap,bp:=panel(al,pw,ascii),panel(bl,pw,ascii)
     candidate:=[]string{}
     if side{candidate=append(candidate,joinPanels(ap,bp,pw)...)}else{candidate=append(candidate,ap...);candidate=append(candidate,bp...)}
-    fmt.Fprintf(&n,"\x1b[1;36m// NETWORK RX %s\x1b[1;34m  TX %s\x1b[0m\r\n",rateText(rx),rateText(tx))
+    fmt.Fprintf(&n,"\x1b[1;36m// NETWORK\x1b[0m %s RX %s  %s TX %s\r\n",activityMark(rx,now,lastSample,ascii,"6"),rateText(rx),activityMark(tx,now,lastSample,ascii,"4"),rateText(tx))
     networkGraph:=cache.graph(2,graphKey{width:w-14,rows:rows,ascii:ascii,scale:netScale,period:period},func()[]string{var x strings.Builder;mirroredBars(&x,rh,th,w-14,rows,ascii,period,"RX","TX",netScale);return splitLines(x.String())})
     candidate=append(candidate,panel(append(splitLines(n.String()),networkGraph...),w,ascii)...)
     candidate=append(candidate,panel(storage,w,ascii)...)
@@ -174,4 +174,13 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
  }
  b.WriteString("\x1b[J")
  return b.String()
+}
+
+ // Use the existing rate samples: no extra collection or independent animation loop.
+func activityMark(rate float64,now,lastSample time.Time,ascii bool,color string)string{
+ glyph:="●";if ascii{glyph="*"}
+ if rate<0||lastSample.IsZero()||now.Sub(lastSample)>2*time.Second{return "\x1b[33m?\x1b[0m"}
+ if rate>0&&now.Sub(lastSample)<150*time.Millisecond{return "\x1b[1;3"+color+"m"+glyph+"\x1b[0m"}
+ glyph="○";if ascii{glyph="."}
+ return "\x1b[0;37m"+glyph+"\x1b[0m"
 }
