@@ -105,3 +105,51 @@ func memoryMeterLines(hw hardwareInfo,width int,withBars bool)[]string{
  }else if hw.swap!=""{out=append(out,hw.swap)}
  return out
 }
+
+ // Stacked RAM and swap contributions use a shared capacity denominator.
+func stackedMemoryRows(ram,swap []float64,w,rows int,ascii bool)[]string{
+ if w<=0||rows<=0{return nil}
+ out:=make([]strings.Builder,rows)
+ n:=min(len(ram),len(swap))
+ for x:=0;x<w;x++{
+  lo,hi:=x*n/w,(x+1)*n/w
+  if hi<=lo{hi=min(n,lo+1)}
+  var r,s float64;count:=0
+  for i:=lo;i<hi;i++{
+   if ram[i]>=0&&swap[i]>=0&&ram[i]+swap[i]<=100.000001{r+=ram[i];s+=swap[i];count++}
+  }
+  blue,total:=0,0
+  if count>0{
+   blue=int(math.Round(r/float64(count)*float64(rows*2)/100))
+   total=int(math.Round((r+s)/float64(count)*float64(rows*2)/100))
+   blue=min(rows*2,max(0,blue));total=min(rows*2,max(blue,total))
+  }
+  for y:=0;y<rows;y++{
+   lower:=(rows-1-y)*2
+   color:=func(level int)string{if level<blue{return "4"};if level<total{return "5"};return ""}
+   a,z:=color(lower),color(lower+1)
+   switch{
+   case a=="":out[y].WriteByte(' ')
+   case a==z:fmt.Fprintf(&out[y],"\x1b[4%sm \x1b[0m",a)
+   case ascii:
+    if z!=""{fmt.Fprintf(&out[y],"\x1b[3%s;4%sm=\x1b[0m",z,a)}else{fmt.Fprintf(&out[y],"\x1b[3%sm.\x1b[0m",a)}
+   case z=="":fmt.Fprintf(&out[y],"\x1b[3%sm▄\x1b[0m",a)
+   default:fmt.Fprintf(&out[y],"\x1b[3%s;4%sm▄\x1b[0m",a,z)
+   }
+  }
+ }
+ lines:=make([]string,rows);for i:=range out{lines[i]=out[i].String()};return lines
+}
+func stackedMemoryHistory(b *strings.Builder,ram,swap []float64,w,rows int,ascii bool,period time.Duration,hw hardwareInfo){
+ value:="N/A"
+ if hw.ram.total>0{
+  total:=float64(hw.ram.total)+float64(hw.swapCapacity.total)
+  value=percentText(100*(float64(hw.ram.used)+float64(hw.swapCapacity.used))/total)
+ }
+ fmt.Fprintf(b,"\x1b[1;34m// MEMORY\x1b[0m %s RAM+SWAP\r\n",value)
+ for y,line:=range stackedMemoryRows(ram,swap,w,rows,ascii){
+  label:="";if y==0{label="100"};if y==rows-1{label="0"}
+  fmt.Fprintf(b,"%3s |%s\r\n",label,line)
+ }
+ timeAxis(b,w,5,len(ram),period)
+}
