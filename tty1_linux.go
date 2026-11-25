@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 )
@@ -22,6 +23,11 @@ func runTTY1Bridge() error {
 	if !isTTY1FD(os.Stdin) || !isTTY1FD(os.Stdout) {
 		return errors.New("tty1 bridge refused: stdin/stdout are not /dev/tty1")
 	}
+
+	// Linux Pdeathsig follows the creating thread, not the whole process.
+	// Keep that thread alive while supervising the dashboard child.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	stop := make(chan os.Signal, 2)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP, syscall.SIGQUIT)
