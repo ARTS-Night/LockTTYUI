@@ -141,3 +141,11 @@ func trafficScale(rx,tx []float64) float64 {
  }
  return scale
 }
+
+// Grow immediately; shrink only after 15 consecutive one-second low ceilings.
+type rateScale struct{value float64; low int}
+func (s *rateScale) update(target float64){
+ if target<1024{target=1024}
+ if target>s.value{s.value=target;s.low=0;return}
+ if target<=s.value/2{s.low++;if s.low>=15{s.value=target;s.low=0}}else{s.low=0}
+}
