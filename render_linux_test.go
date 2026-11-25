@@ -20,9 +20,9 @@ func TestFullRepairRestoresExternalConsoleWrites(t *testing.T){
  // Kernel printk may change physical terminal cells without changing our frame.
  // The normal delta must skip identical content, but the repair forces a full
  // in-place repaint of the frame, including every previously unchanged row.
- s:="\\x1b[HLOCKTTYUI\\x1b[K\\r\\nCPU\\x1b[K\\r\\nMEMORY\\x1b[K\\x1b[J"
+ s:="\x1b[HLOCKTTYUI\x1b[K\r\nCPU\x1b[K\r\nMEMORY\x1b[K\x1b[J"
  var w frameWriter
  if got:=w.delta(s,s,false);len(got)!=0{t.Fatalf("unchanged frame emitted delta: %q",got)}
  if got:=string(w.delta(s,s,true));got!=s{t.Fatalf("repair did not restore entire frame: %q",got)}
- if strings.Contains(s,"\\x1b[2J"){t.Fatal("repair should not flash screen clear")}
+ if strings.Contains(s,"\x1b[2J"){t.Fatal("repair should not flash screen clear")}
 }
