@@ -178,7 +178,13 @@ func run()error{
  rx,tx:=-1.0,-1.0
  rh,th:=make([]float64,len(ch)),make([]float64,len(ch))
  for i:=range rh{rh[i]=-1;th[i]=-1}
- var buckets [4]historyBucket
+ var buckets [6]historyBucket
+ diskPrev:=readDiskTraffic()
+ diskTime:=next
+ dr,dw:=-1.0,-1.0
+ dh,wh:=make([]float64,60),make([]float64,60)
+ for i:=range dh{dh[i]=-1;wh[i]=-1}
+ hw:=readHardware()
  nextHistory:=next.Add(time.Second)
  var buf [128]byte
  for{
@@ -204,10 +210,16 @@ func run()error{
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
    netPrev,netTime=netCur,now
    buckets[2].add(rx);buckets[3].add(tx)
+   diskNext:=readDiskTraffic()
+   dr,dw=-1,-1
+   if a,b,ok:=trafficRate(diskPrev,diskNext,now.Sub(diskTime));ok{dr,dw=a,b}
+   diskPrev,diskTime=diskNext,now
+   buckets[4].add(dr);buckets[5].add(dw)
    lastSample=now
   }
   if !now.Before(nextHistory){
    ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
+   dh=push(dh,buckets[4].take());wh=push(wh,buckets[5].take())
    for _,c:=range cores{c.history=push(c.history,c.bucket.take())}
    nextHistory=nextHistory.Add(time.Second)
    if !nextHistory.After(now){nextHistory=now.Add(time.Second)}
@@ -215,6 +227,7 @@ func run()error{
   if !now.Before(nextInfo){info=readSystemInfo();nextInfo=now.Add(time.Second)}
   if !now.Before(nextStorage){
    volumes=readVolumes()
+   hw=readHardware()
    nextStorage=now.Add(5*time.Second)
   }
   if !now.Before(next){
@@ -222,7 +235,7 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores)
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dh,wh,dr,dw)
    if frame!=lastFrame {
     if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
     lastFrame=frame
