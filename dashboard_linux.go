@@ -92,7 +92,6 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
  footer:="DISPLAY MODE / q to exit"
  if exhibit{footer="CONSOLE // STANDBY  |  Ctrl+] LOGIN"}
  cpuVal,memVal:=live[0],live[1]
- rx,tx:=live[2],live[3]
  compact:=[]string{
   fmt.Sprintf("CPU %s   RAM+SWAP %s",percentText(cpuVal),percentText(memVal)),
   fmt.Sprintf("NETWORK  %s",hw.io.ioLabel(ioNetRX,now,ascii,false,"RX")),
