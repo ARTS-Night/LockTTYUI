@@ -64,8 +64,17 @@ func TestResponsiveGraphGrowth(t *testing.T){
  hw:=hardwareInfo{ram:capacity{100,50,50},swapKnown:true}
  render:=func(w,height int)string{return dashboard(time.Unix(100,0),w,height,true,true,time.Second,h,h,h,h,h,nil,systemInfo{},time.Time{},[4]float64{50,50,0,0},nil,hw,0,0,1024)}
  small,tall,wide:=render(120,48),render(120,90),render(240,48)
- if strings.Count(tall,"\x1b[46m ")<=strings.Count(small,"\x1b[46m "){t.Fatal("graph did not grow vertically")}
- if strings.Count(wide,"\x1b[46m ")<=strings.Count(small,"\x1b[46m "){t.Fatal("graph did not grow horizontally")}
+ if coloredCells(tall,"\x1b[46m")<=coloredCells(small,"\x1b[46m"){t.Fatal("graph did not grow vertically")}
+ if coloredCells(wide,"\x1b[46m")<=coloredCells(small,"\x1b[46m"){t.Fatal("graph did not grow horizontally")}
  if !strings.Contains(wide,"-60s"){t.Fatal("history span changed")}
  if len(strings.Split(tall,"\r\n"))!=90{t.Fatal("footer not anchored")}
+}
+
+func coloredCells(frame,code string)int{
+ n:=0
+ for _,part:=range strings.Split(frame,code)[1:]{
+  end:=strings.IndexByte(part,27)
+  if end>=0{n+=visibleWidth(part[:end])}
+ }
+ return n
 }
