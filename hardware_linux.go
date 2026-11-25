@@ -45,7 +45,7 @@ func readDiskTraffic(disks []string,reuse ...map[string]traffic) map[string]traf
  return out
 }
 
-type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool; statuses []statusItem; checking bool; events *eventStream; failedUnits uint64; failedKnown bool; volumes []volume; disks []string}
+type hardwareInfo struct{cpu,gpu,docker string; ram,swapCapacity capacity; swapKnown bool; statuses []statusItem; checking bool; events *eventStream; failedUnits uint64; failedKnown bool; volumes []volume; disks []string; io ioTelemetry}
 type hardwareCollector struct{
  discovered time.Time
  failedChecked time.Time
