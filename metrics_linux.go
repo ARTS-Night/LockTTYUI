@@ -6,6 +6,7 @@ import (
  "bufio"
  "fmt"
  "io"
+ "math"
  "os"
  "strconv"
  "strings"
@@ -78,12 +79,14 @@ func sizeText(n uint64) string {
 }
 
 type traffic struct { rx,tx uint64 }
-func readTraffic() (map[string]traffic,error) {
- f,e:=os.Open("/proc/net/dev");if e!=nil{return nil,e};defer f.Close()
- return parseTraffic(f)
+func readTraffic(reuse ...map[string]traffic) (map[string]traffic,error) {
+ f,e:=os.Open("/proc/net/dev");if e!=nil{if len(reuse)>0&&reuse[0]!=nil{clear(reuse[0]);return reuse[0],e};return nil,e};defer f.Close()
+ return parseTraffic(f,reuse...)
 }
-func parseTraffic(r io.Reader) (map[string]traffic,error) {
- out:=map[string]traffic{}
+func parseTraffic(r io.Reader,reuse ...map[string]traffic) (map[string]traffic,error) {
+ var out map[string]traffic
+ if len(reuse)>0{out=reuse[0]}
+ if out==nil{out=make(map[string]traffic)}else{clear(out)}
  s:=bufio.NewScanner(r)
  for s.Scan() {
   name,rest,ok:=strings.Cut(s.Text(),":")
@@ -108,7 +111,7 @@ func trafficRate(prev,next map[string]traffic,elapsed time.Duration)(float64,flo
  return rx/elapsed.Seconds(),tx/elapsed.Seconds(),true
 }
 func rateText(n float64) string {
- if n<0{return "N/A"}
+ if n<0||math.IsNaN(n)||math.IsInf(n,0)||n>=float64(^uint64(0)){return "N/A"}
  return sizeText(uint64(n))+"/s"
 }
 
@@ -116,7 +119,7 @@ func rateText(n float64) string {
 func trafficScale(rx,tx []float64) float64 {
  scale:=1024.0
  for _,series:=range [][]float64{rx,tx} {
-  for _,v:=range series {for v>scale {scale*=2}}
+  for _,v:=range series {if math.IsNaN(v)||math.IsInf(v,0){continue};for v>scale&&scale<1<<63 {scale*=2}}
  }
  return scale
 }
