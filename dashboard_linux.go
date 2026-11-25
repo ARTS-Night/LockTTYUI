@@ -76,7 +76,8 @@ func storagePanel(volumes []volume,w,limit int,ascii bool) []string {
 }
 
 func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Duration,ch,mh,sh,rh,th []float64,volumes []volume,info systemInfo,lastSample time.Time,live [4]float64,cores map[int]*coreSeries,hw hardwareInfo,dr,dw float64,netScale float64) string {
- w:=min(140,width-1)
+ w:=min(512,width-1)
+ height=min(256,height)
  if w<1||height<1{return "\x1b[H\x1b[J"}
  head:="\x1b[1;36m/// LOCKTTYUI // TELEMETRY\x1b[0m"
  pulse:=systemIndicator(hw,ascii)
@@ -92,7 +93,7 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
  rx,tx:=live[2],live[3]
  compact:=[]string{fmt.Sprintf("CPU %s   RAM+SWAP %s",percentText(cpuVal),percentText(memVal)),fmt.Sprintf("RX %s  TX %s",rateText(rx),rateText(tx))}
  if w<40||height<24 {
-  lines=append([]string{"LOCKTTYUI",now.Format("15:04:05")},compact...)
+  lines=append([]string{head,now.Format("15:04:05")},compact...)
   for _,v:=range volumes{if v.total>0{lines=append(lines,fmt.Sprintf("%s %s FREE %s",v.label,percentText(100*float64(v.used)/float64(v.total)),sizeText(v.available)));break}}
  }else{
   // Fit complete panels, reducing optional detail before using compact mode.
@@ -104,21 +105,29 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
   for detail:=3;detail>=0&&!fitted;detail--{
    // Calculate the exact panel cost before rendering any history.
    coreLines:=[]string{}
-   if detail>=1{coreLines=coreMeterLines(cores,pw-4,detail+1)}
+   if detail>=1{coreLines=coreMeterLines(cores,pw-4,detail+1+max(0,(height-48)/12))}
    if hw.cpu!=""{coreLines=append(coreLines,hw.cpu)}
    memLines:=memoryMeterLines(hw,pw-4,detail>=1)
-   storage:=storagePanel(volumes,w-4,max(1,detail),ascii)
+   storage:=storagePanel(volumes,w-4,max(1,detail+max(0,(height-48)/12)),ascii)
    storage=append(storage,fmt.Sprintf("I/O R %s  W %s",rateText(dr),rateText(dw)))
    extra:=len(storage)+2
    if hw.gpu!=""&&detail>=1{extra+=4}
    status:=statusLines(hw.statuses,hw.docker,w-4,ascii,hw.checking)
    if detail>=1&&len(status)>0{extra+=len(status)+2}
-   for rows:=10;rows>=2;rows--{
+   // Reserve event space before choosing graph height, so large graphs
+   // cannot consume the entire event panel budget.
+   eventLines:=[]string(nil)
+   if detail>=1&&budget>=30{eventLines=hw.events.lines(min(3,max(1,(height-30)/10)))}
+   eventCost:=0
+   if len(eventLines)>0{eventCost=len(eventLines)+2}
+   // CPU and RAM share height; network uses an even or odd row count.
+   // Select geometry using integers only, then draw once.
+   for rows:=max(2,budget);rows>=2;rows--{
     cpuRows,memRows:=rows+5+len(coreLines),rows+5+len(memLines)
     upperRows:=cpuRows+memRows
     if side{upperRows=max(cpuRows,memRows)}
-    networkRows:=2*max(1,rows/2)+5
-    if upperRows+networkRows+extra>budget{continue}
+    networkRows:=rows+5
+    if upperRows+networkRows+extra+eventCost>budget{continue}
     var a,b,n strings.Builder
     barHistory(&a,fmt.Sprintf("CPU (%d LOGICAL)",len(cores)),ch,pw-9,rows,ascii,period,cpuVal,"6")
     stackedMemoryHistory(&b,mh,sh,pw-9,rows,ascii,period,hw)
@@ -135,21 +144,17 @@ func dashboard(now time.Time,width,height int,ascii,exhibit bool,period time.Dur
     candidate=append(candidate,panel(storage,w,ascii)...)
     if hw.gpu!=""&&detail>=1{candidate=append(candidate,panel([]string{"\x1b[1;36m// GPU\x1b[0m",hw.gpu},w,ascii)...)}
     if detail>=1&&len(status)>0{candidate=append(candidate,panel(status,w,ascii)...)}
-    if detail>=1{
-     for count:=min(3,budget-len(candidate)-3);count>0;count--{
-      eventLines:=hw.events.lines(count)
-      if len(eventLines)>0&&len(candidate)+len(eventLines)+2<=budget{candidate=append(candidate,panel(eventLines,w,ascii)...);break}
-     }
-    }
+    if len(eventLines)>0{candidate=append(candidate,panel(eventLines,w,ascii)...)}
     if len(candidate)<=budget{lines=append(lines,candidate...);fitted=true;break}
    }
   }
   if !fitted{
-   lines=append([]string{"LOCKTTYUI",now.Format("15:04:05")},compact...)
+   lines=append([]string{head,now.Format("15:04:05")},compact...)
    if len(volumes)>0&&volumes[0].total>0{v:=volumes[0];lines=append(lines,fmt.Sprintf("ROOT %s FREE %s",percentText(100*float64(v.used)/float64(v.total)),sizeText(v.available)))}
   }
  }
  if len(lines)>=height{lines=lines[:max(0,height-1)]}
+ for len(lines)<height-1{lines=append(lines,"")}
  lines=append(lines,footer)
  var b strings.Builder
  b.WriteString("\x1b[H")
