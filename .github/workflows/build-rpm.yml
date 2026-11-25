@@ -33,6 +33,7 @@ jobs:
       - name: Clean DNF install and removal test
         run: |
           docker run --rm -v "$PWD/dist:/packages:ro" almalinux:9 bash -euxc '
+            dnf -y install systemd util-linux-core
             stock_getty=$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)
             dnf -y --nogpgcheck --setopt=install_weak_deps=False install /packages/lockttyui-*.rpm
             rpm -q lockttyui
