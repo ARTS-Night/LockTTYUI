@@ -27,8 +27,15 @@ No automatic pre-login cycle is installed. Do not enable this preview as a login
 Requires Go 1.23+, rpm-build, systemd RPM macros and a Linux build host. From repository root:
 
     mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-    git archive --format=tar.gz --prefix=lockttyui-0.5.0/ HEAD > ~/rpmbuild/SOURCES/lockttyui-0.5.0.tar.gz
+    git archive --format=tar.gz --prefix=lockttyui-0.6.0/ HEAD > ~/rpmbuild/SOURCES/lockttyui-0.6.0.tar.gz
     cp packaging/lockttyui.spec ~/rpmbuild/SPECS/
     rpmbuild -ba ~/rpmbuild/SPECS/lockttyui.spec
 
 Inspect RPM contents before installing with dnf install /absolute/path/to/package.rpm. Stop preview and restore getty before dnf remove lockttyui. License field is provisional for private development; review before publishing.
+
+## Standalone installation
+Install the RPM matching the machine architecture with `sudo dnf install ./lockttyui-0.6.0-1.el9.x86_64.rpm` (use the actual filename).
+Run `lockttyui --exhibit` as an ordinary user. Go is needed only on the build host.
+Docker, NVIDIA utilities and individual monitored services are optional. Systemd is recommended for service status; a failed query is not a healthy result.
+The build disables CGO and external Go module resolution. Verify the resulting ELF has no interpreter or NEEDED entries before release.
+A local RPM is not a hosted DNF repository. Repository signing, publishing and upgrade tests remain release gates.
