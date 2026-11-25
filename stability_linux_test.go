@@ -31,7 +31,7 @@ func TestDashboardBounds(t *testing.T){
  for _,w:=range []int{20,40,80,120,200}{
   for _,height:=range []int{10,24,30,48,80}{
    for _,ascii:=range []bool{true,false}{
-    frame:=dashboard(now,w,height,ascii,true,time.Second,h,h,h,h,h,[]volume{{"ROOT",capacity{100,50,40}}},systemInfo{},now,[4]float64{50,50,0,0},cores,hardwareInfo{cpu:"AVG 3 GHz",swap:"SWAP 1/2",gpu:"GPU01 50%",docker:"DOCKER 1 populated scopes / 1 visible"},0,0,1024)
+    frame:=dashboard(now,w,height,ascii,true,time.Second,h,h,h,h,h,[]volume{{"ROOT",capacity{100,50,40}}},systemInfo{},now,[4]float64{50,50,0,0},cores,hardwareInfo{cpu:"AVG 3 GHz",ram:capacity{100,50,50},swapCapacity:capacity{50,10,40},swapKnown:true,gpu:"GPU01 50%",docker:"DOCKER 1 populated scopes / 1 visible"},0,0,1024)
     lines:=strings.Split(frame,"\r\n")
     if len(lines)>height{t.Fatalf("%dx%d: %d lines",w,height,len(lines))}
     for _,line:=range lines{if visibleWidth(line)>min(140,w-1){t.Fatalf("%dx%d: line too wide",w,height)}}
@@ -45,4 +45,15 @@ func TestStackedMemoryRows(t *testing.T){
  if len(rows)!=2||visibleWidth(rows[0])!=2||visibleWidth(rows[1])!=2{t.Fatal(rows)}
  if !strings.Contains(rows[1],"\x1b[34;45m▄"){t.Fatal("missing mixed cell",rows)}
  if !strings.Contains(rows[0],"\x1b[45m "){t.Fatal("missing swap",rows)}
+}
+
+func TestCombinedMemoryPercent(t *testing.T){
+ hw:=hardwareInfo{ram:capacity{800,600,200},swapCapacity:capacity{400,100,300},swapKnown:true}
+ if p:=combinedMemoryPercent(hw);p<58.33||p>58.34{t.Fatal(p)}
+ hw.swapKnown=false
+ if combinedMemoryPercent(hw)!=-1{t.Fatal("unknown swap must not be zero")}
+}
+func TestSmallSwapVisible(t *testing.T){
+ rows:=stackedMemoryRows([]float64{50},[]float64{0.01},1,4,false)
+ if !strings.Contains(strings.Join(rows,""),"\x1b[35m▄"){t.Fatal(rows)}
 }
