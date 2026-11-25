@@ -26,5 +26,5 @@ func TestBarRows(t *testing.T) {
  rows := barRows([]float64{0,100},2,2,100,false,true,"6")
  if len(rows)!=2 {t.Fatal(rows)}
  for _,row:=range rows {if visibleWidth(row)!=2 {t.Fatal(row)}}
- if rows[0]!=" \x1b[46m \x1b[0m" {t.Fatalf("unexpected fill: %q",rows[0])}
+ if rows[0]!=" \x1b[47m \x1b[0m" {t.Fatalf("unexpected fill: %q",rows[0])}
 }
