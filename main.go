@@ -156,6 +156,7 @@ func run()error{
    netCur,ne:=readTraffic()
    rx,tx=-1,-1
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
+   if ne!=nil{netCur=nil}
    netPrev,netTime=netCur,now
    buckets[2].add(rx);buckets[3].add(tx)
    diskNext:=readDiskTraffic(disks)
@@ -187,10 +188,11 @@ func run()error{
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
    key:=struct{row,col uint16;second int64;sample time.Time;read bool;revision uint64}{ws.Row,ws.Col,now.Unix(),lastSample,!lastSample.IsZero()&&now.Sub(lastSample)<150*time.Millisecond,revision}
    if key!=lastRenderKey||lastFrame==""{
+   resized:=key.row!=lastRenderKey.row||key.col!=lastRenderKey.col
    lastRenderKey=key
    frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,sh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value)
-   if frame!=lastFrame {
-    if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
+   if frame!=lastFrame||resized {
+    if _,e=fmt.Fprint(tty,frameDelta(lastFrame,frame,resized));e!=nil{return e}
     lastFrame=frame
    }
    }
