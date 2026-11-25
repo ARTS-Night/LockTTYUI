@@ -108,7 +108,8 @@ func run()error{
  }()
  fmt.Fprint(tty,"\x1b[?25l\x1b[2J")
  ch,mh:=make([]float64,60),make([]float64,60)
- for i:=range ch{ch[i]=-1;mh[i]=-1}
+ sh:=make([]float64,60)
+ for i:=range ch{ch[i]=-1;mh[i]=-1;sh[i]=-1}
  prev,pe:=readCPU()
  corePrev:=readCores()
  cores:=map[int]*coreSeries{}
@@ -127,7 +128,9 @@ func run()error{
  rx,tx:=-1.0,-1.0
  rh,th:=make([]float64,len(ch)),make([]float64,len(ch))
  for i:=range rh{rh[i]=-1;th[i]=-1}
- var buckets [4]historyBucket
+ var buckets [5]historyBucket
+ var lastRamTotal,lastSwapTotal uint64
+ var lastSwapKnown bool
  netScale:=rateScale{}
  netScale.update(1024)
  diskPrev:=readDiskTraffic()
@@ -153,7 +156,16 @@ func run()error{
    hw.ram,hw.swapCapacity,hw.swapKnown=readMemoryCapacity()
    m=-1
    if hw.ram.total>0{m=100*float64(hw.ram.used)/float64(hw.ram.total)}
-   buckets[1].add(m)
+   if hw.ram.total>0{
+    if lastRamTotal!=hw.ram.total||lastSwapTotal!=hw.swapCapacity.total||lastSwapKnown!=hw.swapKnown{
+     for i:=range mh{mh[i]=-1;sh[i]=-1}
+     buckets[1]=historyBucket{};buckets[4]=historyBucket{}
+     lastRamTotal,lastSwapTotal,lastSwapKnown=hw.ram.total,hw.swapCapacity.total,hw.swapKnown
+    }
+    total:=float64(hw.ram.total)+float64(hw.swapCapacity.total)
+    buckets[1].add(100*float64(hw.ram.used)/total)
+    buckets[4].add(100*float64(hw.swapCapacity.used)/total)
+   }
    netCur,ne:=readTraffic()
    rx,tx=-1,-1
    if ne==nil { if a,b,ok:=trafficRate(netPrev,netCur,now.Sub(netTime));ok{rx,tx=a,b} }
@@ -166,7 +178,7 @@ func run()error{
    lastSample=now
   }
   if !now.Before(nextHistory){
-   ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
+   ch=push(ch,buckets[0].take());mh=push(mh,buckets[1].take());sh=push(sh,buckets[4].take());rh=push(rh,buckets[2].take());th=push(th,buckets[3].take())
    netScale.update(trafficScale(rh,th))
    nextHistory=nextHistory.Add(time.Second)
    if !nextHistory.After(now){nextHistory=now.Add(time.Second)}
@@ -184,7 +196,7 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value)
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,sh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dr,dw,netScale.value)
    if frame!=lastFrame {
     if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
     lastFrame=frame
