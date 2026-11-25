@@ -52,7 +52,7 @@ func timeAxis(b *strings.Builder,w,offset,n int,period time.Duration){
 }
 // Same scale, separate halves, no overlapping characters.
 func mirroredBars(b *strings.Builder,a,z []float64,w,rows int,ascii bool,period time.Duration,first,second string,scale float64){
- upper:=max(1,rows/2);lower:=upper
+ upper:=max(1,rows/2);lower:=max(1,rows-upper)
  for y,line:=range barRows(a,w,upper,scale,false,ascii,"6"){
   label:="";if y==0{label=sizeText(uint64(scale))}
   fmt.Fprintf(b,"%8s |%s\r\n",label,line)
