@@ -35,12 +35,3 @@ func (e *eventStream) recordStatus(at time.Time,old,next []statusItem){
   e.add(at,level,v.label+" "+v.state)
  }
 }
-func heartbeat(now,last time.Time,valid bool,ascii bool)string{
- if last.IsZero(){return "\x1b[33mINITIALIZING\x1b[0m"}
- if !valid||now.Sub(last)>2*time.Second{return "\x1b[33mTELEMETRY N/A\x1b[0m"}
- if now.Sub(last)<150*time.Millisecond{
-  if ascii{return "\x1b[1;32m[*] PULSE\x1b[0m"}
-  return "\x1b[1;32m[●] PULSE\x1b[0m"
- }
- return "\x1b[32m[ ] LIVE\x1b[0m"
-}
