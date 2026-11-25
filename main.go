@@ -244,10 +244,4 @@ func run()error{
   }
  }
 }
-func main(){
- if len(os.Args)==2&&os.Args[1]=="--tty1-bridge"{
-  if e:=runTTY1Bridge();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}
-  return
- }
- if e:=run();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}
-}
+func main(){if e:=run();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}}
