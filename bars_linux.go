@@ -15,6 +15,9 @@ import (
 func barRows(h []float64,w,rows int,scale float64,invert,ascii bool,color string) []string {
  if w<=0||rows<=0{return nil}
  out:=make([]strings.Builder,rows)
+ fullCell:="\x1b[4"+color+"m \x1b[0m"
+ glyph:="▄";if invert{glyph="▀"};if ascii{glyph="."}
+ halfCell:="\x1b[3"+color+"m"+glyph+"\x1b[0m"
  for x:=0;x<w;x++ {
   lo,hi:=x*len(h)/w,(x+1)*len(h)/w
   if hi<=lo{hi=min(len(h),lo+1)}
@@ -25,12 +28,8 @@ func barRows(h []float64,w,rows int,scale float64,invert,ascii bool,color string
   for y:=0;y<rows;y++ {
    level:=rows-1-y;if invert{level=y}
    k:=fill-level*2
-   if k>=2 {fmt.Fprintf(&out[y],"\x1b[4%sm \x1b[0m",color)
-   }else if k==1{
-    if ascii{fmt.Fprintf(&out[y],"\x1b[3%sm.\x1b[0m",color)}else{
-     glyph:="▄";if invert{glyph="▀"}
-     fmt.Fprintf(&out[y],"\x1b[3%sm%s\x1b[0m",color,glyph)
-    }
+   if k>=2 {out[y].WriteString(fullCell)
+   }else if k==1{out[y].WriteString(halfCell)
    }else{out[y].WriteByte(' ')}
   }
  }
@@ -152,7 +151,7 @@ func stackedMemoryHistory(b *strings.Builder,ram,swap []float64,w,rows int,ascii
  value:=percentText(combinedMemoryPercent(hw))
  fmt.Fprintf(b,"\x1b[1;34m// MEMORY\x1b[0m %s RAM+SWAP\r\n",value)
  for y,line:=range stackedMemoryRows(ram,swap,w,rows,ascii){
-  label:="";if y==0{label="100"};if y==rows-1{label="0"}
+  label:="";if y==0{label="100"}
   fmt.Fprintf(b,"%3s |%s\r\n",label,line)
  }
  axis:="─";corner:="└";if ascii{axis="-";corner="+"}
