@@ -132,7 +132,9 @@ func run()error{
  ascii:=flag.Bool("ascii",false,"ASCII fallback")
  interval:=flag.Duration("interval",50*time.Millisecond,"display refresh interval (50ms to 5s)")
  sample:=flag.Duration("sample",250*time.Millisecond,"metric sample interval (100ms to 1s)")
+ style:=flag.String("graph","bar","graph style: bar or line")
  flag.Parse()
+ if *style!="bar"&&*style!="line"{return fmt.Errorf("graph must be bar or line")}
  if *glyphTest{fmt.Println("ASCII: + - | *\nUnicode: ─ │ ┌ ┐ └ ┘ ├ ┤\nOptional (not used): ▁ ▂ ▃ ▄ ▅ ▆ ▇ █ ⣿");return nil}
  if *interval<50*time.Millisecond||*interval>5*time.Second||*sample<100*time.Millisecond||*sample>time.Second{return fmt.Errorf("interval must be 50ms..5s; sample must be 100ms..1s")}
  tty,e:=os.OpenFile("/dev/tty",os.O_RDWR,0)
@@ -235,7 +237,7 @@ func run()error{
    if !next.After(now){next=now.Add(*interval)}
    var ws struct{Row,Col,X,Y uint16}
    if e=ioctl(fd,syscall.TIOCGWINSZ,unsafe.Pointer(&ws));e!=nil{return e}
-   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dh,wh,dr,dw)
+   frame:=dashboard(now,int(ws.Col),int(ws.Row),*ascii,*exhibit,time.Second,ch,mh,rh,th,volumes,info,lastSample,[4]float64{v,m,rx,tx},cores,hw,dh,wh,dr,dw,*style)
    if frame!=lastFrame {
     if _,e=fmt.Fprint(tty,frame);e!=nil{return e}
     lastFrame=frame
