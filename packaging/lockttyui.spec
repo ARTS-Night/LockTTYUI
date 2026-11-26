@@ -7,7 +7,7 @@ Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  golang >= 1.23
 BuildRequires:  systemd-rpm-macros
 # tty1 is the only modified getty instance; agetty remains the login handler.
-Requires:      systemd
+Requires:      systemd >= 252
 Requires:      /usr/sbin/agetty
 
 %global debug_package %{nil}
@@ -21,7 +21,7 @@ tty2+, SSH and PAM are unchanged.
 %setup -q
 
 %build
-export CGO_ENABLED=0 GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
+export CGO_ENABLED=0 GOAMD64=v1 GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
 go build -mod=readonly -trimpath -ldflags="-s -w" -o lockttyui .
 
 %check

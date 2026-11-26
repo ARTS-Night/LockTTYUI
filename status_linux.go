@@ -15,7 +15,7 @@ import (
 type statusItem struct{label,state,color string}
 type watchedUnit struct{unit,label string}
 var watchedUnits=[]watchedUnit{
- {"docker.service","DOCKER"},{"containerd.service","CONTAINERD"},{"sshd.service","SSH"},
+ {"docker.service","DOCKER"},{"containerd.service","CONTAINERD"},{"sshd.service","SSH"},{"ssh.service","SSH"},
  {"firewalld.service","FIREWALL"},{"NetworkManager.service","NETWORK"},
  {"chronyd.service","TIME SYNC"},{"nginx.service","NGINX"},{"httpd.service","HTTPD"},
  {"podman.service","PODMAN"},
@@ -35,6 +35,7 @@ func unitStatus(label,load,active string)(statusItem,bool){
 }
 func parseServiceStatus(data string)[]statusItem{
  var out []statusItem
+ seen:=map[string]bool{}
  for _,block:=range strings.Split(strings.TrimSpace(data),"\n\n"){
   props:=map[string]string{}
   for _,line:=range strings.Split(block,"\n"){
@@ -42,7 +43,7 @@ func parseServiceStatus(data string)[]statusItem{
   }
   for _,u:=range watchedUnits{
    if props["Id"]!=u.unit{continue}
-   if item,ok:=unitStatus(u.label,props["LoadState"],props["ActiveState"]);ok{out=append(out,item)}
+   if item,ok:=unitStatus(u.label,props["LoadState"],props["ActiveState"]);ok&&!seen[u.label]{out=append(out,item);seen[u.label]=true}
    break
   }
  }
@@ -68,7 +69,18 @@ func readServiceStatus()[]statusItem{
   case "0":out=append(out,statusItem{"SELINUX","PERMISSIVE","3"})
   }
  }
+ if data,err:=os.ReadFile("/sys/module/apparmor/parameters/enabled");err==nil{
+  if item,ok:=apparmorStatus(string(data));ok{out=append(out,item)}
+ }
  return out
+}
+// Kernel module availability, not a claim that any particular profile is enforced.
+func apparmorStatus(data string)(statusItem,bool){
+ switch strings.TrimSpace(data){
+ case "Y":return statusItem{"APPARMOR","ENABLED","3"},true
+ case "N":return statusItem{"APPARMOR","DISABLED","3"},true
+ }
+ return statusItem{},false
 }
 func statusLines(items []statusItem,docker string,width int,ascii bool,checking ...bool)[]string{
  if len(items)==0&&docker==""{return nil}

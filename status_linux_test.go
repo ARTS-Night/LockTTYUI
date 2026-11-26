@@ -26,3 +26,11 @@ func TestFailedCount(t *testing.T){
  {hardwareInfo{failedKnown:true,failedUnits:3},"03 ERR"},
  }{if !strings.Contains(systemIndicator(v.hw,true),v.want){t.Fatal(v)}}
 }
+
+func TestDebianStatusAliasesAndAppArmor(t *testing.T){
+ data:="Id=ssh.service\nLoadState=loaded\nActiveState=active\n\nId=ssh.service\nLoadState=loaded\nActiveState=active"
+ items:=parseServiceStatus(data)
+ if len(items)!=1||items[0].label!="SSH"||items[0].state!="ACTIVE"{t.Fatal(items)}
+ if item,ok:=apparmorStatus("Y\n");!ok||item.state!="ENABLED"||item.color=="2"{t.Fatal(item,ok)}
+ if _,ok:=apparmorStatus("unknown");ok{t.Fatal("unknown AppArmor state")}
+}

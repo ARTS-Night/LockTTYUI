@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+[ "$1" = remove ] || exit 0
+rm -f /run/systemd/system/getty@tty1.service.d/90-lockttyui-fallback.conf
+if [ -d /run/systemd/system ]; then
+  /usr/bin/systemctl daemon-reload
+fi
+rm -f /run/lockttyui-tty1-login.ready /run/lockttyui-tty1-fallback /run/lockttyui-tty1-removing
+if [ -d /run/systemd/system ]; then
+  /usr/bin/systemctl reset-failed getty@tty1.service || :
+  /usr/bin/systemctl --no-block start getty@tty1.service
+fi

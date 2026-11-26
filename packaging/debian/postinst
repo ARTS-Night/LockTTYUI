@@ -1,0 +1,27 @@
+#!/bin/sh
+set -eu
+[ -d /run/systemd/system ] || exit 0
+case "$1" in
+  configure)
+    seeded=0
+    state=$(/usr/bin/systemctl show -p ActiveState --value getty@tty1.service)
+    case "$state" in
+      active|activating|reloading)
+        if [ ! -e /run/lockttyui-tty1-login.ready ]; then
+          touch /run/lockttyui-tty1-login.ready
+          seeded=1
+        fi
+        ;;
+    esac
+    /usr/bin/systemctl daemon-reload
+    if [ "$seeded" = 1 ] && [ "$(/usr/bin/systemctl show -p ActiveState --value getty@tty1.service)" = inactive ]; then
+      /usr/bin/systemctl --no-block start lockttyui-tty1-fallback.service
+    fi
+    ;;
+  abort-remove)
+    rm -f /run/lockttyui-tty1-removing
+    /usr/bin/systemctl daemon-reload
+    /usr/bin/systemctl --no-block start lockttyui-tty1-fallback.service
+    ;;
+esac
+exit 0

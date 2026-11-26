@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+[ "$1" = remove ] || exit 0
+[ -d /run/systemd/system ] || exit 0
+touch /run/lockttyui-tty1-removing
+if ! /usr/bin/systemctl stop lockttyui-preview.service lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service lockttyui-tty1.service; then
+  rm -f /run/lockttyui-tty1-removing
+  /usr/bin/systemctl --no-block start lockttyui-tty1-fallback.service || :
+  echo "Cannot stop LockTTYUI safely; refusing package removal." >&2
+  exit 1
+fi
