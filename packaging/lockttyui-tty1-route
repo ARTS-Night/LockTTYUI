@@ -1,5 +1,5 @@
 #!/bin/sh
-# Invoked only by root-owned systemd oneshot units. Fixed paths and verbs.
+# Only root-owned systemd units call this helper. Never execute agetty here.
 set -eu
 umask 077
 state=/run
@@ -7,36 +7,78 @@ systemctl=/usr/bin/systemctl
 token="$state/lockttyui-tty1-login.ready"
 fallback="$state/lockttyui-tty1-fallback"
 removing="$state/lockttyui-tty1-removing"
+dropdir="$state/systemd/system/getty@tty1.service.d"
+dropin="$dropdir/90-lockttyui-fallback.conf"
 
-[ ! -e "$removing" ] || exit 0
+allowed() {
+  [ ! -e "$removing" ] || return 1
+  phase=$("$systemctl" is-system-running 2>/dev/null || :)
+  case "$phase" in stopping|offline) return 1 ;; esac
+  return 0
+}
+
+start_getty() {
+  allowed || return 0
+  : > "$token"
+  allowed || return 0
+  "$systemctl" --no-block start getty@tty1.service
+}
+
+native_fallback() {
+  allowed || return 0
+  : > "$fallback"
+  : > "$token"
+  # Native restart, not a loop of OnSuccess/OnFailure callbacks. Only tty1
+  # receives this ephemeral override; all vendor authentication commands stay.
+  mkdir -p "$dropdir"
+  tmp=$(mktemp "$dropdir/.lockttyui-fallback.XXXXXX")
+  trap 'rm -f "$tmp"' EXIT
+  cat > "$tmp" <<'CONF'
+[Unit]
+OnSuccess=
+OnFailure=
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=3s
+CONF
+  allowed || return 0
+  mv -f "$tmp" "$dropin"
+  "$systemctl" daemon-reload
+  allowed || return 0
+  "$systemctl" reset-failed getty@tty1.service || :
+  start_getty
+}
+
+allowed || exit 0
 
 case "${1:-}" in
   handoff|fallback)
-    # Never queue a getty while the dashboard still owns the terminal.
     current=$("$systemctl" show -p ActiveState --value lockttyui-tty1.service)
     case "$current" in inactive|failed) ;; *) exit 0 ;; esac
-    if [ "$1" = fallback ]; then
-      : > "$fallback"
+    if [ "$1" = fallback ] || [ -e "$fallback" ]; then
+      native_fallback
+    else
+      start_getty
     fi
-    : > "$token"
-    [ ! -e "$removing" ] || exit 0
-    "$systemctl" --no-block start getty@tty1.service
     ;;
   return)
-    # OnSuccess runs after the getty has exited. Keep its lease if a new
-    # login job is already active/activating (for example a manual start).
     current=$("$systemctl" show -p ActiveState --value getty@tty1.service)
-    [ "$current" = inactive ] || exit 0
-    if [ -e "$fallback" ]; then
-      : > "$token"
-      # Bound rapid clean exits in fallback mode, without delaying normal logout.
-      sleep 1
-      [ ! -e "$removing" ] || exit 0
-      "$systemctl" --no-block start getty@tty1.service
-    else
+    case "$current" in inactive|failed) ;; *) exit 0 ;; esac
+    # systemd >=251 provides raw status to a handler of exactly one unit.
+    # Missing, killed, or nonzero status is not a proven clean logout.
+    if [ ! -e "$fallback" ] && [ "$current" = inactive ] &&
+       [ "${MONITOR_UNIT:-}" = getty@tty1.service ] &&
+       [ "${MONITOR_SERVICE_RESULT:-}" = success ] &&
+       [ "${MONITOR_EXIT_CODE:-}" = exited ] &&
+       [ "${MONITOR_EXIT_STATUS:-}" = 0 ]; then
+      allowed || exit 0
       rm -f "$token"
-      [ ! -e "$removing" ] || exit 0
+      allowed || exit 0
       "$systemctl" --no-block start lockttyui-tty1.service
+    else
+      native_fallback
     fi
     ;;
   *)

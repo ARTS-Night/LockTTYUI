@@ -17,11 +17,12 @@ The corrected design uses two distinct services:
    systemd. The default vendor `getty@.service` ExecStart is untouched,
    so **systemd starts the distribution agetty with its normal SELinux
    transition**. Passwords and shells use the normal PAM/SELinux path.
-3. A clean logout triggers `lockttyui-tty1-return.service`, which removes the
-   login lease and starts the dashboard. An unsuccessful getty exit retries
-   stock getty after 3 seconds without handing the terminal to the dashboard.
-4. A dashboard failure triggers `lockttyui-tty1-fallback.service`: stock getty
-   remains the login interface for the rest of the boot (including clean logout).
+3. The return router checks systemd's raw MONITOR_EXIT_CODE/STATUS. Only an
+   observed successful exit with status 0 releases the lease and returns to UI.
+4. A dashboard or getty failure (including unconfirmed exit status) creates a
+   TTY1-only runtime drop-in under /run/systemd/system/getty@tty1.service.d/.
+   It clears routing callbacks and enables native getty Restart=always with
+   a 3-second delay and no start limit. Stock authentication stays unchanged.
    The fallback and lease are root-owned files in /run. A reboot clears them.
    The dashboard uses tty-fail and does not reset, hang up, or disallocate
    an occupied terminal. During RPM removal all route helpers are suppressed.
@@ -45,9 +46,9 @@ It never invokes `curl | bash`, never relaxes SELinux, and never interrupts
 a logged-in TTY1. Pin the tag to install a known release. Since RPM releases
 are unsigned, GitHub metadata and the RPM share the same trust boundary.
 
-A fresh install does not forcibly take over an existing TTY1 getty. After
-ensuring the VT is idle from TTY2 or SSH, stop `getty@tty1.service` and start
-`lockttyui-tty1.service` to activate the dashboard. If already active,
+A fresh install does not forcibly take over an existing TTY1 getty. Reboot
+at a convenient time to activate the dashboard. Do not stop an active getty:
+an administrative stop may be classified as an uncertain exit and enter fallback. If already active,
 the installed executable is picked up at the next dashboard service start.
 The helper does not set up any persistent DNF repository or background updater.
 
@@ -59,12 +60,9 @@ Update from build 8 (or install fresh) with:
 
     sudo dnf upgrade ./lockttyui-0.6.0-N.el9.x86_64.rpm
 
-Use `dnf install ./...` if it is not already installed. On build8-to-new
-upgrades, the old bridge may still be serving tty1 until the service is
-switched. **Only from tty2 or SSH with no logged-in tty1 session**, do:
-
-    sudo systemctl stop getty@tty1.service
-    sudo systemctl start lockttyui-tty1.service
+Use `dnf install ./...` if it is not already installed. Reboot at a convenient
+time after the first install or a legacy build8 upgrade, with SSH/TTY2
+available. Never stop a live login just to activate the UI.
 
 The dashboard should appear on tty1. Press Ctrl+] and verify a normal login
 with SELinux **Enforcing**. Run `id -Z` in the resulting shell. Its user
@@ -101,18 +99,12 @@ warnings are an operational requirement.
 
 ## Fallback recovery (TTY2 or SSH)
 
-After a dashboard crash, stock getty is intentionally retained until the next
-boot. To try the dashboard again without rebooting, first verify tty1 is
-vacant (no logged-in user). Do not stop a live login.
-
-    sudo rm -f /run/lockttyui-tty1-fallback
-    sudo systemctl reset-failed lockttyui-tty1.service getty@tty1.service lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service
-    sudo systemctl stop getty@tty1.service
-
-A successful getty stop normally triggers the return router. If no getty is
-running and no handoff is in progress, remove a stale login lease and start
-the dashboard explicitly. A broken stock getty or a locally overridden unit
-can still require administrative recovery; keep SSH or tty2 available.
+After a dashboard or getty crash, the native TTY1 getty remains active for the
+rest of the boot. Reboot at a convenient time to clear the runtime fallback.
+The RPM removes its own runtime drop-in on final uninstall. Do not remove only
+the marker or manually restart getty; keep SSH/TTY2 available. If the stock
+getty binary or its local configuration is itself broken, administrative
+repair is still required. Native retries do not guarantee successful login.
 
 ## Diagnosis (TTY2 or SSH)
 

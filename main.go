@@ -118,8 +118,6 @@ func run()error{
  rh,th:=make([]float64,len(ch)),make([]float64,len(ch))
  for i:=range rh{rh[i]=-1;th[i]=-1}
  var buckets [5]historyBucket
- var lastRamTotal,lastSwapTotal uint64
- var lastSwapKnown bool
  netScale:=rateScale{}
  netScale.update(1024)
  var disks []string
@@ -176,12 +174,8 @@ func run()error{
    m=-1
    if hw.ram.total>0&&hw.swapKnown{
     m=combinedMemoryPercent(hw)
-    if lastRamTotal!=hw.ram.total||lastSwapTotal!=hw.swapCapacity.total||lastSwapKnown!=hw.swapKnown{
-     cache.invalidate()
-     for i:=range mh{mh[i]=-1;sh[i]=-1}
-     buckets[1]=historyBucket{};buckets[4]=historyBucket{}
-     lastRamTotal,lastSwapTotal,lastSwapKnown=hw.ram.total,hw.swapCapacity.total,hw.swapKnown
-    }
+    // Preserve historical percentage samples: each sample uses the
+    // RAM+swap capacity at the time it was taken (including hotplug/ballooning).
     total:=float64(hw.ram.total)+float64(hw.swapCapacity.total)
     buckets[1].add(100*float64(hw.ram.used)/total)
     buckets[4].add(100*float64(hw.swapCapacity.used)/total)

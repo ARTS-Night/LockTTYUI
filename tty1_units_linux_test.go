@@ -35,8 +35,8 @@ func TestTTY1LoginRunsStockGettyDirectly(t *testing.T){
     if len(p["ExecStart"])!=0 {t.Fatalf("getty command overridden: %v",p["ExecStart"])}
     expectUnitValue(t,p,"ConditionPathExists","/run/lockttyui-tty1-login.ready")
     if len(p["ExecStartPre"]) != 0 {t.Fatal("getty must keep the login lease")}
-    expectUnitValue(t,p,"Restart","on-failure")
-    expectUnitValue(t,p,"RestartSec","3s")
+    expectUnitValue(t,p,"Restart","no")
+    expectUnitValue(t,p,"OnFailure","lockttyui-tty1-return.service")
     expectUnitValue(t,p,"OnSuccess","lockttyui-tty1-return.service")
 }
 
@@ -68,6 +68,7 @@ func TestTTY1HandoffGatesGettyStart(t *testing.T){
         p:=unitDirectives(t,"packaging/lockttyui-tty1-"+action+".service")
         expectUnitValue(t,p,"ConditionPathExists","!/run/lockttyui-tty1-removing")
         expectUnitValue(t,p,"ExecStart","/usr/libexec/lockttyui-tty1-route "+action)
+        expectUnitValue(t,p,"StartLimitIntervalSec","0")
     }
 }
 

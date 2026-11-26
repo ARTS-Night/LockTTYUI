@@ -59,7 +59,8 @@ if [ -d /run/systemd/system ]; then
  /usr/bin/systemctl daemon-reload >/dev/null 2>&1 || :
  # If the pre-existing getty exited during the reload, reconcile the lease.
  if [ "$seeded" -eq 1 ] && [ "$(/usr/bin/systemctl show -p ActiveState --value getty@tty1.service 2>/dev/null || :)" = inactive ]; then
-  /usr/bin/systemctl --no-block start lockttyui-tty1-return.service >/dev/null 2>&1 || :
+  # Exit status is uncertain during adoption; conservatively retain login.
+  /usr/bin/systemctl --no-block start lockttyui-tty1-fallback.service >/dev/null 2>&1 || :
  fi
 fi
 
@@ -80,11 +81,16 @@ fi
 
 %postun
 %systemd_postun lockttyui-preview.service
-# On final removal the original getty starts if idle; active tty1 login remains untouched.
+ # On final removal remove only our own runtime fallback drop-in before reload.
+# Active tty1 login remains untouched.
 if [ -d /run/systemd/system ]; then
+ if [ "$1" -eq 0 ]; then
+  /usr/bin/rm -f /run/systemd/system/getty@tty1.service.d/90-lockttyui-fallback.conf
+ fi
  if /usr/bin/systemctl daemon-reload; then
   if [ "$1" -eq 0 ]; then
    /usr/bin/rm -f /run/lockttyui-tty1-login.ready /run/lockttyui-tty1-fallback /run/lockttyui-tty1-removing
+   /usr/bin/systemctl reset-failed getty@tty1.service >/dev/null 2>&1 || :
    /usr/bin/systemctl --no-block start getty@tty1.service || echo "Start stock getty manually from SSH or tty2." >&2
   fi
  else

@@ -23,13 +23,8 @@ or `bash lockttyui-install.sh remove` to uninstall. This script requires
 `curl`, `python3`, `sha256sum`, DNF and sudo. It never executes downloaded
 code as a shell script and **never restarts an active TTY1 login**.
 
-**First activation:** From SSH or TTY2, ensure nobody is logged into TTY1,
-then run:
-
-```bash
-sudo systemctl stop getty@tty1.service
-sudo systemctl start lockttyui-tty1.service
-```
+**First activation:** Reboot at a convenient time with SSH or TTY2 available.
+The RPM does not stop an existing login to take over TTY1.
 
 Ctrl+] opens the standard login. After logout, the dashboard returns.
 An upgrade of an already-running dashboard takes effect the next time it
@@ -48,13 +43,13 @@ recovery path available; production stability requires further distro/VM testing
     go build -o lockttyui .
     ./lockttyui --exhibit
 
-The dashboard uses a modern monochrome palette: black console background, white headings and graphs, grey frames and secondary data, and restrained green/red status indicators. No blue, cyan, magenta or yellow theme colors. Ctrl+] exits exhibit mode. Use --ascii for font compatibility, --glyph-test to inspect supported glyphs, --interval and --sample to tune the default 50ms display / 250ms sampling cadence. History uses one-second averages over 60 seconds. CPU and memory panels balance graph heights against each other in side-by-side layouts, so memory's paging detail does not leave unused blank space beneath the CPU chart. At idle a subtle grey 50% guide shows the CPU graph scale without implying CPU activity.
+The dashboard uses a modern monochrome palette: black console background, white headings and graphs, grey frames and secondary data, and restrained green/red status indicators. No blue, cyan, magenta or yellow theme colors. Ctrl+] exits exhibit mode. Use --ascii for font compatibility, --glyph-test to inspect supported glyphs, --interval and --sample to tune the default 50ms display / 250ms sampling cadence. History uses one-second averages over 60 seconds; memory history retains the percentage of capacity observed at each sample even if VM memory size changes. CPU and memory panels balance graph heights against each other in side-by-side layouts, so memory's paging detail does not leave unused blank space beneath the CPU chart. At idle a subtle grey 50% guide shows the CPU graph scale without implying CPU activity.
 
 CPU, memory, swap, local storage, disk I/O, network, and optional hardware statistics are displayed subject to available screen space. NETWORK shows DOWNLOAD (RX) and UPLOAD (TX); STORAGE shows READ and WRITE. The MEMORY I/O section displays /proc/vmstat pgpgin/pgpgout in bytes/sec and swap page-in/page-out in bytes/sec. These are paging/storage-backed events, **not DRAM bandwidth**. Green signals inbound/read activity; red signals outbound/write activity; idle is grey and missing data is ?. A 900ms pulse hold prevents distracting flicker. The small icons update on the existing metric timer, not an additional render loop. On Linux virtual consoles, external kernel printk messages can overwrite terminal cells even when LockTTYUI has not changed. The renderer therefore performs an in-place full repaint every 750ms to repair console interference, while retaining low-overhead delta updates between repairs. It does not change the system-wide kernel console log level; exceptionally frequent console messages can still be briefly visible. Optional NVIDIA metrics use /usr/bin/nvidia-smi with a timeout; Docker counts are visible populated systemd cgroup scopes, not an authoritative container inventory.
 
 ## Safety
 
-Standalone exhibit mode is not a session lock. It returns to the invoking shell. The RPM provides a **TTY1-only** pre-login dashboard in its own unprivileged systemd service: Ctrl+] stops the dashboard, then systemd launches the unmodified distro agetty in its normal SELinux context. On successful logout, systemd starts the dashboard again. A dashboard failure falls back to stock getty until the next boot; a failed getty retries after 3 seconds. A login lease is retained throughout the getty lifecycle, and the display never forcibly hangs up an occupied terminal. TTY2+ and SSH use unmodified standard login. No PAM changes, no Docker socket, no identity/address disclosure. The dashboard service runs as user nobody; SELinux Enforcing login/logout behavior and physical console handoff require VM validation.
+Standalone exhibit mode is not a session lock. It returns to the invoking shell. The RPM provides a **TTY1-only** pre-login dashboard in its own unprivileged systemd service: Ctrl+] stops the dashboard, then systemd launches the unmodified distro agetty in its normal SELinux context. On successful logout, systemd starts the dashboard again. A dashboard or getty failure falls back to stock getty until the next boot, with native 3-second retries and no routing loop. Only a confirmed clean exit restores the dashboard. A login lease is retained throughout the getty lifecycle, and the display never forcibly hangs up an occupied terminal. TTY2+ and SSH use unmodified standard login. No PAM changes, no Docker socket, no identity/address disclosure. The dashboard service runs as user nobody; SELinux Enforcing login/logout behavior and physical console handoff require VM validation.
 
 See packaging/OPERATIONS.md for automatic TTY1 integration, install/uninstall rollback, exact VM test steps and manual isolated tty9 preview. The preview is not a login replacement. PrivateNetwork can make preview network rates unavailable.
 

@@ -52,8 +52,9 @@ jobs:
             test -f /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             # The stock agetty MUST run as systemd ExecStart, not from LockTTYUI.
             ! grep -q "^ExecStart=" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
-            grep -Fxq "Restart=on-failure" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            grep -Fxq "Restart=no" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             grep -Fxq "OnSuccess=lockttyui-tty1-return.service" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            grep -Fxq "OnFailure=lockttyui-tty1-return.service" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             grep -Fxq "ConditionPathExists=/run/lockttyui-tty1-login.ready" /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             test -f /usr/lib/systemd/system/lockttyui-tty1.service
             test -f /usr/lib/systemd/system/lockttyui-tty1-handoff.service
@@ -65,6 +66,7 @@ jobs:
             grep -Fxq "StandardInput=tty-fail" /usr/lib/systemd/system/lockttyui-tty1.service
             grep -Fxq "TTYVHangup=no" /usr/lib/systemd/system/lockttyui-tty1.service
             test -x /usr/libexec/lockttyui-tty1-route
+            sh -n /usr/libexec/lockttyui-tty1-route
             test -f /usr/lib/systemd/system/lockttyui-tty1-return.service
             test -f /usr/lib/systemd/system/lockttyui-tty1-fallback.service
             test ! -e /usr/lib/systemd/system/getty@tty2.service.d/50-lockttyui.conf
