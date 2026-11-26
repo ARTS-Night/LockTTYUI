@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -149,15 +150,19 @@ func collectDetails(full bool) detailReport {
 	if status == "OK" {
 		for _, line := range bytes.Split(data, []byte{'\n'}) {
 			var e struct {
-				Unit       string `json:"_SYSTEMD_UNIT"`
-				ObjectUnit string `json:"OBJECT_SYSTEMD_UNIT"`
-				Message    string `json:"MESSAGE"`
-				Timestamp  string `json:"__REALTIME_TIMESTAMP"`
+				Unit        string `json:"_SYSTEMD_UNIT"`
+				ObjectUnit  string `json:"OBJECT_SYSTEMD_UNIT"`
+				ManagerUnit string `json:"UNIT"`
+				PID         string `json:"_PID"`
+				Message     string `json:"MESSAGE"`
+				Timestamp   string `json:"__REALTIME_TIMESTAMP"`
 			}
 			if json.Unmarshal(line, &e) != nil {
 				continue
 			}
-			if e.ObjectUnit != "" {
+			if e.PID == "1" && e.ManagerUnit != "" {
+				e.Unit = e.ManagerUnit
+			} else if e.ObjectUnit != "" {
 				e.Unit = e.ObjectUnit
 			}
 			known := false
@@ -214,12 +219,27 @@ func collectDetails(full bool) detailReport {
 	d.RuntimeOverride = pathState("/run/systemd/system/getty@tty1.service.d/90-lockttyui-fallback.conf")
 	d.VendorDropIn = pathState("/usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf")
 	d.AdminDropIn = pathState("/etc/systemd/system/getty@tty1.service.d")
-	data, status = diagnosticCommand("/usr/bin/rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}.%{ARCH}", "lockttyui")
+	if strings.HasPrefix(diagnosticOS(), "debian ") {
+		data, status = diagnosticCommand("/usr/bin/dpkg-query", "-W", "-f=${db:Status-Abbrev} ${Version} ${Architecture}", "lockttyui")
+	} else {
+		data, status = diagnosticCommand("/usr/bin/rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}.%{ARCH}", "lockttyui")
+	}
 	d.Package = status
 	if status == "OK" {
-		d.Package = safePropertyValue(strings.TrimSpace(string(data)))
+		d.Package = safePackageValue(strings.TrimSpace(string(data)))
 	}
 	return d
+}
+func safePackageValue(s string) string {
+	if len(s) == 0 || len(s) > 100 {
+		return "UNKNOWN"
+	}
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune(" ._+-:~", c)) {
+			return "REDACTED"
+		}
+	}
+	return s
 }
 func pathState(path string) string {
 	fi, err := os.Lstat(path)
@@ -271,7 +291,7 @@ func printDetails(d detailReport) {
 			}
 		}
 	}
-	fmt.Printf("TTY1: %s\nHandoff token: %s\nRPM: %s\nJournal: %s\n", d.TTY1, d.Token, d.Package, d.JournalStatus)
+	fmt.Printf("TTY1: %s\nHandoff token: %s\nPackage: %s\nJournal: %s\n", d.TTY1, d.Token, d.Package, d.JournalStatus)
 	fmt.Printf("Fallback marker: %s\nRemoval marker: %s\nRuntime fallback override: %s\n", d.Fallback, d.Removing, d.RuntimeOverride)
 	fmt.Printf("Token age: %s\nVendor drop-in: %s\nAdmin drop-in directory: %s\n", d.TokenAge, d.VendorDropIn, d.AdminDropIn)
 	for _, h := range d.History {
@@ -282,7 +302,12 @@ func printDetails(d detailReport) {
 
 // Accept only known distributions and numeric release identifiers.
 func diagnosticOS() string {
-	data, err := os.ReadFile("/etc/os-release")
+	f, err := os.Open("/etc/os-release")
+	if err != nil {
+		return "UNKNOWN"
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, 16385))
 	if err != nil || len(data) > 16384 {
 		return "UNKNOWN"
 	}

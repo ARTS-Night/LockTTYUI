@@ -3,11 +3,9 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -31,7 +29,13 @@ type diagnosticReport struct {
 	Details      *detailReport    `json:"details,omitempty"`
 }
 
+var buildRevision = ""
+var buildNumber = ""
+
 func buildVersion() string {
+	if buildRevision != "" && buildNumber != "" {
+		return "0.6.0 (build " + safePropertyValue(buildNumber) + ", commit " + safePropertyValue(buildRevision) + ")"
+	}
 	if b, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range b.Settings {
 			if s.Key == "vcs.revision" && len(s.Value) >= 12 {
@@ -46,13 +50,8 @@ func buildVersion() string {
 // journal entries and arbitrary configuration can contain private information.
 func inspectUnit(name string) diagnosticUnit {
 	u := diagnosticUnit{Name: name, State: "UNKNOWN", Result: "UNKNOWN", Restart: "UNKNOWN"}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "/usr/bin/systemctl", "--system", "--no-pager", "show", name, "--property=ActiveState,Result,Restart")
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "LC_ALL=C", "SYSTEMD_COLORS=0"}
-	cmd.WaitDelay = 100 * time.Millisecond
-	data, err := cmd.Output()
-	if err != nil || len(data) > 4096 {
+	data, status := diagnosticCommand("/usr/bin/systemctl", "--system", "--no-pager", "show", name, "--property=ActiveState,Result,Restart")
+	if status != "OK" {
 		return u
 	}
 	for _, line := range strings.Split(string(data), "\n") {
@@ -129,7 +128,7 @@ func diagnosticCLI(args []string) (bool, error) {
 		}
 	}
 	if args[0] != "status" {
-		fmt.Println("[UNKNOWN] POST_LOGOUT_RECOVERY_FAILED: login/logout history was not checked; verify on the target system.")
+		fmt.Println("[UNKNOWN] POST_LOGOUT_RECOVERY_UNKNOWN: login/logout history was not checked; verify on the target system.")
 		fmt.Println("[UNKNOWN] SELINUX_DENIAL: audit records are not inspected by this report.")
 		fmt.Println("[UNKNOWN] TTY1_SESSION: session occupancy was not checked.")
 	}

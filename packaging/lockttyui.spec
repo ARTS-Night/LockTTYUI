@@ -22,7 +22,7 @@ tty2+, SSH and PAM are unchanged.
 
 %build
 export CGO_ENABLED=0 GOAMD64=v1 GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
-go build -mod=readonly -trimpath -ldflags="-s -w" -o lockttyui .
+go build -mod=readonly -trimpath -ldflags="-s -w -X main.buildNumber=%{?build_release}%{!?build_release:1} -X main.buildRevision=%{?source_revision}%{!?source_revision:unknown}" -o lockttyui .
 
 %check
 export CGO_ENABLED=0 GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local

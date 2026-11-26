@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"strings"
@@ -15,7 +16,7 @@ func TestDiagnosticCommandsDoNotRequireTTY(t *testing.T) {
 		if !handled || err != nil {
 			os.Exit(2)
 		}
-		return
+		os.Exit(0)
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestDiagnosticCommandsDoNotRequireTTY$")
 	cmd.Env = append(os.Environ(), "LOCKTTYUI_DIAGNOSTIC_CHILD=1")
@@ -23,8 +24,12 @@ func TestDiagnosticCommandsDoNotRequireTTY(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v: %s", err, b)
 	}
-	if !strings.Contains(string(b), `"post_logout_recovery": "UNKNOWN`) {
-		t.Fatalf("missing unknown recovery: %s", b)
+	var report diagnosticReport
+	if err := json.Unmarshal(b, &report); err != nil {
+		t.Fatalf("invalid JSON: %v: %s", err, b)
+	}
+	if report.Schema != 1 || report.Details == nil || len(report.Units) != 5 || !strings.HasPrefix(report.Recovery, "UNKNOWN") {
+		t.Fatalf("invalid schema: %+v", report)
 	}
 	if strings.ContainsRune(string(b), '\x1b') {
 		t.Fatal("unexpected terminal escape")
