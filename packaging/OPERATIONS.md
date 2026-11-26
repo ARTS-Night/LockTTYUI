@@ -39,9 +39,10 @@ restarted by the RPM.
 
 `scripts/install.sh` is a readable local helper for GitHub Releases:
 `bash scripts/install.sh install [build-N]`, `status`, and `remove`.
-It chooses the highest numeric published `build-N` (do not depend on GitHub
-API list order), downloads an AlmaLinux 9 x86_64 RPM from the repository's
-official asset URL and checks the GitHub asset's SHA-256 digest before DNF.
+It defaults to the validated build-15; a specific build-N must be given
+to opt into another prerelease. It downloads an AlmaLinux 9 x86_64 RPM from
+the official asset URL and checks the GitHub asset's SHA-256 digest before DNF.
+An installed newer package is not downgraded by the helper.
 It never invokes `curl | bash`, never relaxes SELinux, and never interrupts
 a logged-in TTY1. Pin the tag to install a known release. Since RPM releases
 are unsigned, GitHub metadata and the RPM share the same trust boundary.

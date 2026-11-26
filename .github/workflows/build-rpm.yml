@@ -35,9 +35,14 @@ jobs:
           bash -n scripts/install.sh
           bash scripts/install.sh --help | grep -Fq "Install/update"
 
-      - name: Clean DNF install, reinstall and removal test
+      - name: Fetch known previous RPM for upgrade regression
         run: |
-          docker run --rm -v "$PWD/dist:/packages:ro" -v "$PWD:/src:ro" almalinux:9 bash -euxc '
+          mkdir -p previous
+          curl -fL --retry 3 -o previous/lockttyui-0.6.0-15.el9.x86_64.rpm https://github.com/ARTS-Night/LockTTYUI/releases/download/build-15/lockttyui-0.6.0-15.el9.x86_64.rpm
+          echo "e3bbba164fa38ae31c9543951c712455a79f84d06162539c417e4fcaa77b2426  previous/lockttyui-0.6.0-15.el9.x86_64.rpm" | sha256sum -c -
+      - name: Clean DNF install, reinstall, upgrade and removal test
+        run: |
+          docker run --rm -v "$PWD/dist:/packages:ro" -v "$PWD/previous:/previous:ro" -v "$PWD:/src:ro" almalinux:9 bash -euxc '
             dnf -y install systemd util-linux-core python3
             # AlmaLinux 9 contains curl-minimal; installing full curl conflicts.
             command -v curl
@@ -96,6 +101,19 @@ jobs:
             test ! -e /usr/libexec/lockttyui-tty1-route
             test ! -e /usr/lib/systemd/system/getty.target.wants/lockttyui-tty1.service
             test -f /usr/lib/systemd/system/getty@.service
+            # Exercise a real upgrade transaction from the validated build-15.
+            dnf -y --nogpgcheck --setopt=install_weak_deps=False install /previous/*.rpm
+            dnf -y --nogpgcheck upgrade /packages/lockttyui-*.rpm
+            expected=$(rpm -qp --qf "%{VERSION}-%{RELEASE}" /packages/lockttyui-*.rpm)
+            test "$(rpm -q --qf "%{VERSION}-%{RELEASE}" lockttyui)" = "$expected"
+            rpm -V lockttyui
+            test -x /usr/libexec/lockttyui-tty1-route
+            systemd-analyze --man=no verify getty@tty1.service lockttyui-tty1.service lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service
+            dnf -y remove lockttyui
+            test ! -e /usr/bin/lockttyui
+            test ! -e /usr/libexec/lockttyui-tty1-route
+            test ! -e /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
+            test "$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)" = "$stock_getty"
           '
       - name: Verify static ELF and checksums
         run: |
