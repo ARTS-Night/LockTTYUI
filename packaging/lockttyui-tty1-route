@@ -28,6 +28,11 @@ start_getty() {
 
 native_fallback() {
   allowed || return 0
+  # Do not reconfigure routing while getty may own tty1 or be starting.
+  getty_state=$("$systemctl" show -p ActiveState --value getty@tty1.service) || return 1
+  case "$getty_state" in inactive|failed) ;; *) event GETTY_NOT_INACTIVE; return 0 ;; esac
+  allowed || return 0
+  event FALLBACK_SELECTED
   : > "$fallback"
   : > "$token"
   # Native restart, not a loop of OnSuccess/OnFailure callbacks. Only tty1

@@ -26,7 +26,11 @@ The corrected design uses two distinct services:
    systemd. The default vendor `getty@.service` ExecStart is untouched,
    so **systemd starts the distribution agetty with its normal SELinux
    transition**. Passwords and shells use the normal PAM/SELinux path.
-3. The return router checks systemd's raw MONITOR_EXIT_CODE/STATUS. Only an
+3. Getty `OnSuccess` starts the return router; `OnFailure` starts the fallback
+   router directly. These must be distinct handlers: systemd 252 and 257 count
+   the two dependency types separately when selecting a monitor source and
+   omit MONITOR_* if both target the same handler. The return router checks
+   systemd's raw MONITOR_EXIT_CODE/STATUS. Only an
    observed successful exit with status 0 releases the lease and returns to UI.
 4. A dashboard or getty failure (including unconfirmed exit status) creates a
    TTY1-only runtime drop-in under /run/systemd/system/getty@tty1.service.d/.

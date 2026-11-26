@@ -30,6 +30,8 @@ func TestTTY1RouteTransitions(t *testing.T) {
         {"ignored-kill","return","inactive","inactive","running","success","killed","KILL",true,false,false,true,true,true,"getty@tty1.service"},
         {"getty-failed","return","inactive","failed","running","exit-code","exited","1",true,false,false,true,true,true,"getty@tty1.service"},
         {"unknown-status","return","inactive","inactive","running","","","",true,false,false,true,true,true,"getty@tty1.service"},
+        {"fallback-getty-active","fallback","failed","active","running","","","",false,false,false,false,false,false,""},
+        {"fallback-getty-starting","fallback","failed","activating","running","","","",false,false,false,false,false,false,""},
         {"crash-fallback","fallback","failed","inactive","running","","","",false,false,false,true,true,true,"getty@tty1.service"},
         {"fallback-logout","return","failed","inactive","running","success","exited","0",true,true,false,true,true,true,"getty@tty1.service"},
         {"erase-handoff","handoff","inactive","inactive","running","","","",false,false,true,false,false,false,""},

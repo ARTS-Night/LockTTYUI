@@ -36,7 +36,7 @@ func TestTTY1LoginRunsStockGettyDirectly(t *testing.T){
     expectUnitValue(t,p,"ConditionPathExists","/run/lockttyui-tty1-login.ready")
     if len(p["ExecStartPre"]) != 0 {t.Fatal("getty must keep the login lease")}
     expectUnitValue(t,p,"Restart","no")
-    expectUnitValue(t,p,"OnFailure","lockttyui-tty1-return.service")
+    expectUnitValue(t,p,"OnFailure","lockttyui-tty1-fallback.service")
     expectUnitValue(t,p,"OnSuccess","lockttyui-tty1-return.service")
 }
 
