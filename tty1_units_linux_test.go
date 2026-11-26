@@ -43,6 +43,8 @@ func TestTTY1LoginRunsStockGettyDirectly(t *testing.T){
 func TestTTY1DashboardUnprivilegedAndSingleConsole(t *testing.T){
     p:=unitDirectives(t,"packaging/lockttyui-tty1.service")
     expectUnitValue(t,p,"User","nobody")
+    // The account primary group differs across Debian and Enterprise Linux.
+    if len(p["Group"]) != 0 {t.Fatalf("group must follow account primary group: %v",p["Group"])}
     expectUnitValue(t,p,"NoNewPrivileges","yes")
     expectUnitValue(t,p,"TTYPath","/dev/tty1")
     expectUnitValue(t,p,"ExecStart","/usr/bin/lockttyui --exhibit --tty-fd")

@@ -15,6 +15,8 @@ dpkg-query -W lockttyui
 dpkg -V lockttyui
 test -x /usr/bin/lockttyui
 test -x /usr/libexec/lockttyui-tty1-route
+getent passwd nobody >/dev/null
+! grep -q '^Group=' "$unitdir/lockttyui-tty1.service"
 test -L "$unitdir/getty.target.wants/lockttyui-tty1.service"
 ! grep -q '^ExecStart=' "$unitdir/getty@tty1.service.d/50-lockttyui.conf"
 test ! -e "$unitdir/getty@tty2.service.d/50-lockttyui.conf"
