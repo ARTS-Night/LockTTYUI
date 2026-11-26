@@ -1,4 +1,4 @@
-name: RPM build
+name: Linux packages
 on:
   push:
     branches: [build]
@@ -11,16 +11,18 @@ jobs:
   rpm:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        el: [9, 10]
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Build RPM on AlmaLinux 9
+      - name: Build RPM on AlmaLinux ${{ matrix.el }}
         run: |
           mkdir -p dist
-          docker run --rm -e BUILD_RELEASE="$GITHUB_RUN_NUMBER" -v "$PWD:/src:ro" -v "$PWD/dist:/out" almalinux:9 bash -euxc '
+          docker run --rm -e BUILD_RELEASE="$GITHUB_RUN_NUMBER" -v "$PWD:/src:ro" -v "$PWD/dist:/out" almalinux:${{ matrix.el }} bash -euxc '
             dnf -y install golang rpm-build systemd-rpm-macros binutils git
             export HOME=/root
             mkdir -p /root/rpmbuild/{SOURCES,SPECS}
@@ -38,12 +40,14 @@ jobs:
       - name: Fetch known previous RPM for upgrade regression
         run: |
           mkdir -p previous
-          curl -fL --retry 3 -o previous/lockttyui-0.6.0-15.el9.x86_64.rpm https://github.com/ARTS-Night/LockTTYUI/releases/download/build-15/lockttyui-0.6.0-15.el9.x86_64.rpm
+          if [ "${{ matrix.el }}" = 9 ]; then
+            curl -fL --retry 3 -o previous/lockttyui-0.6.0-15.el9.x86_64.rpm https://github.com/ARTS-Night/LockTTYUI/releases/download/build-15/lockttyui-0.6.0-15.el9.x86_64.rpm
           echo "e3bbba164fa38ae31c9543951c712455a79f84d06162539c417e4fcaa77b2426  previous/lockttyui-0.6.0-15.el9.x86_64.rpm" | sha256sum -c -
+          fi
       - name: Clean DNF install, reinstall, upgrade and removal test
         run: |
-          docker run --rm -v "$PWD/dist:/packages:ro" -v "$PWD/previous:/previous:ro" -v "$PWD:/src:ro" almalinux:9 bash -euxc '
-            dnf -y install systemd util-linux-core python3
+          docker run --rm -v "$PWD/dist:/packages:ro" -v "$PWD/previous:/previous:ro" -v "$PWD:/src:ro" almalinux:${{ matrix.el }} bash -euxc '
+            dnf -y install systemd /usr/sbin/agetty python3
             # AlmaLinux 9 contains curl-minimal; installing full curl conflicts.
             command -v curl
             bash -n /src/scripts/install.sh
@@ -102,6 +106,7 @@ jobs:
             test ! -e /usr/lib/systemd/system/getty.target.wants/lockttyui-tty1.service
             test -f /usr/lib/systemd/system/getty@.service
             # Exercise a real upgrade transaction from the validated build-15.
+            if compgen -G "/previous/*.rpm" >/dev/null; then
             dnf -y --nogpgcheck --setopt=install_weak_deps=False install /previous/*.rpm
             dnf -y --nogpgcheck upgrade /packages/lockttyui-*.rpm
             expected=$(rpm -qp --qf "%{VERSION}-%{RELEASE}" /packages/lockttyui-*.rpm)
@@ -114,10 +119,11 @@ jobs:
             test ! -e /usr/libexec/lockttyui-tty1-route
             test ! -e /usr/lib/systemd/system/getty@tty1.service.d/50-lockttyui.conf
             test "$(sha256sum /usr/lib/systemd/system/getty@.service | cut -d" " -f1)" = "$stock_getty"
+            fi
           '
       - name: Verify static ELF and checksums
         run: |
-          docker run --rm -v "$PWD/dist:/packages:ro" almalinux:9 bash -euxc '
+          docker run --rm -v "$PWD/dist:/packages:ro" almalinux:${{ matrix.el }} bash -euxc '
             dnf -y install binutils cpio
             mkdir /tmp/check
             cd /tmp/check
@@ -131,18 +137,83 @@ jobs:
           sha256sum -c SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: lockttyui-el9-x86_64
-          path: dist/
+          name: lockttyui-el${{ matrix.el }}-x86_64
+          path: dist/*.rpm
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish unsigned RPM after successful checks
+  deb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [12, 13]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Build and test shared Go code
+        env:
+          CGO_ENABLED: '0'
+          GOAMD64: v1
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOTOOLCHAIN: local
+        run: |
+          go test -mod=readonly ./...
+          go vet -mod=readonly ./...
+          go build -mod=readonly -trimpath -ldflags="-s -w" -o lockttyui .
+      - name: Build DEB
+        run: |
+          mkdir -p dist
+          bash packaging/build-deb.sh "${{ matrix.version }}" "$GITHUB_RUN_NUMBER" "$PWD/lockttyui" "$PWD/dist"
+          dpkg-deb --info dist/*.deb
+          dpkg-deb --contents dist/*.deb
+          readelf -h lockttyui
+          if readelf -l lockttyui | grep -q INTERP; then exit 1; fi
+          if readelf -d lockttyui | grep -q NEEDED; then exit 1; fi
+      - name: APT install, reinstall, remove and purge
+        run: |
+          docker run --rm -v "$PWD/dist:/packages:ro" -v "$PWD/packaging:/packaging:ro" "debian:${{ matrix.version }}" bash -euxc 'bash /packaging/test-deb.sh'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lockttyui-deb${{ matrix.version }}-amd64
+          path: dist/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [rpm, deb]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lockttyui-*
+          path: dist
+          merge-multiple: true
+      - name: Publish all four unsigned packages after successful checks
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          cd dist
+          test "$(find . -maxdepth 1 -name '*.rpm' | wc -l)" -eq 2
+          test "$(find . -maxdepth 1 -name '*.deb' | wc -l)" -eq 2
+          sha256sum *.rpm *.deb > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cd ..
           tag="build-${GITHUB_RUN_NUMBER}"
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release already exists; refusing to overwrite published assets."
+            echo "Release already exists; refusing to overwrite."
             exit 1
           fi
-          gh release create "$tag" dist/*.rpm dist/SHA256SUMS --target "$GITHUB_SHA" --title "LockTTYUI build ${GITHUB_RUN_NUMBER}" --notes "UNSIGNED experimental EL9 x86_64 RPM. Verify SHA256SUMS. Fixes tty1 SELinux login transitions by launching the stock distro agetty directly from systemd; the dashboard is now a separate unprivileged service. TTY2 and SSH unchanged. VM console validation required." --prerelease
+          gh release create "$tag" dist/*.rpm dist/*.deb dist/SHA256SUMS --target "$GITHUB_SHA" --title "LockTTYUI build ${GITHUB_RUN_NUMBER}" --notes "UNSIGNED test packages for AlmaLinux 9/10 x86_64 and Debian 12/13 amd64. Select the matching OS package and verify its SHA-256. Container package tests do not establish live TTY, PAM or SELinux/AppArmor behavior. Use an SSH/TTY2 recovery path and test in a VM." --prerelease

@@ -1,4 +1,13 @@
-# LockTTYUI operations — AlmaLinux 9, TTY1 only
+# LockTTYUI operations — AlmaLinux 9/10 and Debian 12/13, TTY1 only
+
+All targets require systemd 252+ and a text-console installation. Debian uses
+APT/DEB (system units in /lib/systemd/system on Debian 12, /usr/lib/systemd/system
+on Debian 13). The same Go collectors and routing units are shared. The
+AppArmor module flag, when readable, is informational, not profile enforcement.
+Install/remove using `sudo apt install ./filename.deb` / `sudo apt remove lockttyui`.
+Do not change SELinux, AppArmor or PAM to work around an issue. Keep SSH/TTY2
+available and reboot at a suitable time after first installation. New targets
+require physical-console or VM validation.
 
 ## SELinux fix: v0.6.0 build 9 and later
 
@@ -150,8 +159,9 @@ To revert:
 ## Local RPM and release workflow
 
 Go 1.23+, rpm-build, systemd-rpm-macros are required on the build host.
-GitHub Actions on the `build` branch builds in AlmaLinux 9 and tests Go,
-RPM install/uninstall, static ELF dependencies and SHA256 checks, then
-publishes an **unsigned** prerelease only after all checks succeed.
+GitHub Actions on the `build` branch builds RPMs in AlmaLinux 9/10 and
+DEBs for Debian 12/13, tests Go, local-package install/reinstall/removal,
+unit syntax, static ELF and SHA256, then publishes all four unsigned
+packages together only after all jobs succeed.
 A checksum detects accidental alteration but does not authenticate the
 unsigned publisher. There is no hosted DNF repository yet.

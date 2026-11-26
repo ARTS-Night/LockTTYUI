@@ -2,7 +2,30 @@
 
 Read-only Linux console telemetry dashboard. Go 1.23+, no third-party Go dependencies.
 
-## Install from GitHub Releases (AlmaLinux 9 x86_64)
+## Install from GitHub Releases
+
+Multi-distribution release candidates target AlmaLinux 9/10 (x86_64)
+and Debian 12/13 (amd64), using systemd >= 252 on a text-console server.
+Select the matching OS version; never install a package for another OS.
+
+| OS | Package filename (N is the build number) |
+| --- | --- |
+| AlmaLinux 9 | lockttyui-0.6.0-N.el9.x86_64.rpm |
+| AlmaLinux 10 | lockttyui-0.6.0-N.el10.x86_64.rpm |
+| Debian 12 | lockttyui_0.6.0-N+deb12_amd64.deb |
+| Debian 13 | lockttyui_0.6.0-N+deb13_amd64.deb |
+
+Download the matching package and SHA256SUMS from the same release.
+Verify the selected file against its checksum (when only one package
+is downloaded, use `sha256sum --ignore-missing -c SHA256SUMS` and verify
+the exact package filename is reported OK). Install a local RPM with
+`sudo dnf install ./filename.rpm` or a local DEB with
+`sudo apt install ./filename.deb`. Remove using the corresponding package manager.
+The new OS targets remain test candidates until VM console validation.
+Graphical display-manager systems and non-systemd init are out of scope.
+The optional installer helper currently supports only AlmaLinux 9.
+
+### Validated AlmaLinux 9 release
 
 The RPM is distributed through GitHub Releases rather than a DNF repository.
 The supported distribution method is a local RPM installed with DNF.
@@ -59,13 +82,13 @@ CPU, memory, swap, local storage, disk I/O, network, and optional hardware stati
 
 ## Safety
 
-Standalone exhibit mode is not a session lock. It returns to the invoking shell. The RPM provides a **TTY1-only** pre-login dashboard in its own unprivileged systemd service: Ctrl+] stops the dashboard, then systemd launches the unmodified distro agetty in its normal SELinux context. On successful logout, systemd starts the dashboard again. A dashboard or getty failure falls back to stock getty until the next boot, with native 3-second retries and no routing loop. Only a confirmed clean exit restores the dashboard. A login lease is retained throughout the getty lifecycle, and the display never forcibly hangs up an occupied terminal. TTY2+ and SSH use unmodified standard login. No PAM changes, no Docker socket, no identity/address disclosure. The dashboard service runs as user nobody; SELinux Enforcing login/logout behavior and physical console handoff require VM validation.
+Standalone exhibit mode is not a session lock. It returns to the invoking shell. The packages provide a **TTY1-only** pre-login dashboard in its own unprivileged systemd service: Ctrl+] stops the dashboard, then systemd launches the unmodified distro agetty in its normal SELinux context. On successful logout, systemd starts the dashboard again. A dashboard or getty failure falls back to stock getty until the next boot, with native 3-second retries and no routing loop. Only a confirmed clean exit restores the dashboard. A login lease is retained throughout the getty lifecycle, and the display never forcibly hangs up an occupied terminal. TTY2+ and SSH use unmodified standard login. No PAM changes, no Docker socket, no identity/address disclosure. The dashboard service runs as user nobody; SELinux Enforcing login/logout behavior and physical console handoff require VM validation.
 
 See packaging/OPERATIONS.md for automatic TTY1 integration, install/uninstall rollback, exact VM test steps and manual isolated tty9 preview. The preview is not a login replacement. PrivateNetwork can make preview network rates unavailable.
 
 ## Status
 
-Development branch: responsive dashboard and separate TTY1 display/getty services. Automated RPM tests cannot prove physical console handoff or SELinux enforcing user-shell transitions; validate in an AlmaLinux test VM before production deployment.
+Development branch: responsive dashboard and separate TTY1 display/getty services. Automated RPM tests cannot prove physical console handoff or SELinux enforcing user-shell transitions; validate each target in a test VM before production deployment.
 
 ## Resource bounds
 
