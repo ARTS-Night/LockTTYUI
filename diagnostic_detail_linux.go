@@ -170,7 +170,10 @@ func collectDetails(full bool) detailReport {
 			if !known {
 				continue
 			}
-			event := classifyJournal(e.Message)
+			event := classifyRouteEvent(e.Unit, e.Message)
+			if event == "" {
+				event = classifyJournal(e.Message)
+			}
 			if event == "" {
 				continue
 			}
@@ -265,6 +268,20 @@ func journalUnit(pid, unit, object, manager string) string {
 		}
 	}
 	return unit
+}
+
+// Fixed route events are only accepted from the corresponding root-owned units.
+func classifyRouteEvent(unit, message string) string {
+	switch unit {
+	case "lockttyui-tty1-handoff.service", "lockttyui-tty1-return.service", "lockttyui-tty1-fallback.service":
+	default:
+		return ""
+	}
+	switch message {
+	case "LOCKTTYUI_EVENT=GETTY_START_REQUESTED", "LOCKTTYUI_EVENT=GETTY_START_QUEUED", "LOCKTTYUI_EVENT=GETTY_START_REQUEST_FAILED", "LOCKTTYUI_EVENT=FALLBACK_SELECTED", "LOCKTTYUI_EVENT=DASHBOARD_NOT_INACTIVE", "LOCKTTYUI_EVENT=GETTY_NOT_INACTIVE", "LOCKTTYUI_EVENT=DASHBOARD_START_REQUESTED", "LOCKTTYUI_EVENT=DASHBOARD_START_QUEUED", "LOCKTTYUI_EVENT=DASHBOARD_START_REQUEST_FAILED":
+		return strings.TrimPrefix(message, "LOCKTTYUI_EVENT=")
+	}
+	return ""
 }
 func classifyJournal(s string) string {
 	s = strings.ToLower(s)

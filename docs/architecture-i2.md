@@ -89,3 +89,42 @@ isolated machines, then verify SELinux Enforcing, standard login, logout,
 20 cycles, SSH/tty2 isolation, crash and missing-binary recovery on the actual
 AlmaLinux 10 system. No complete compatibility or release-readiness claim is
 made from Go or container tests.
+
+## I-2 implementation notes
+
+The router emits fixed `LOCKTTYUI_EVENT=` messages to its unit journal. The
+request, queue acceptance and request failure have distinct event IDs. Queue
+acceptance means only that systemd accepted a job; the current report's unit
+properties and classified manager journal provide separate observations, not a
+proven per-request confirmation. Fallback selection and refusing to switch while
+the other unit is not inactive also have fixed events. Logs contain no input,
+identity or authentication data. The report accepts these exact messages only
+from the three route units. Since the prelogin unit does not log a typed exit
+reason, an administrative stop and Ctrl+] are not reliably distinguished.
+
+A synchronous wait inside a handler ordered after its triggering unit risks
+systemd job cycles. A one-shot verification timer could observe a failed or
+skipped start without a daemon, but timeout, stale jobs, simultaneous removal,
+unknown tty ownership and ensuring only one finite attempt need isolated systemd
+and real-console tests. A watchdog requires a heartbeat and can kill a hung UI;
+it must not reset or signal an unrelated authenticated session. No timer or
+watchdog is added until that safety proof exists. If tty1 ownership or manager
+state is unknown, do not claim recovery or force a terminal handoff.
+
+`nobody` with its primary group works without account lifecycle scripts, but is
+shared with other programs. DynamicUser reduces shared-account exposure and
+avoids persistent users, yet tty access, SELinux domains, systemctl reads and
+GPU access need testing on all four OSes. A dedicated system user provides a
+stable isolated identity at the cost of package lifecycle and upgrade/removal
+policy. Retain `nobody` temporarily; this is not an assertion that it provides
+strong per-service isolation. Do not switch identities without those tests.
+The router uses a fixed PATH, fixed actions and fixed systemctl executable; the
+root-owned `/run` marker assumptions and check-then-act races remain. A private
+root state directory or flock cannot be safely introduced without accounting
+for upgrades, package removal and lock ordering. No lock was added here.
+
+The 3,813,233-byte binary recorded at commit fea3957 was built in the Go 1.24
+container without release stripping. It is one measurement, not an installed
+package size or RSS measurement. Targets remain <5 MiB binary, <=10 MiB RSS,
+<=1% of one CPU on average, zero new resident daemons and no VT-x/AMD-V
+requirement; RSS, PSS, CPU, TUI subprocesses and long-term usage remain unmeasured.

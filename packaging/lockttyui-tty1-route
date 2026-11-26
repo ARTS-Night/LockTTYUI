@@ -1,7 +1,11 @@
 #!/bin/sh
 # Only root-owned systemd units call this helper. Never execute agetty here.
 set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 umask 077
+
+event() { printf "LOCKTTYUI_EVENT=%s\n" "$1" >&2; }
 state=/run
 systemctl=/usr/bin/systemctl
 token="$state/lockttyui-tty1-login.ready"
@@ -21,11 +25,18 @@ start_getty() {
   allowed || return 0
   : > "$token"
   allowed || return 0
-  "$systemctl" --no-block start getty@tty1.service
+  event GETTY_START_REQUESTED
+  if "$systemctl" --no-block start getty@tty1.service; then
+    event GETTY_START_QUEUED
+  else
+    event GETTY_START_REQUEST_FAILED
+    return 1
+  fi
 }
 
 native_fallback() {
   allowed || return 0
+  event FALLBACK_SELECTED
   : > "$fallback"
   : > "$token"
   # Native restart, not a loop of OnSuccess/OnFailure callbacks. Only tty1
@@ -56,7 +67,7 @@ allowed || exit 0
 case "${1:-}" in
   handoff|fallback)
     current=$("$systemctl" show -p ActiveState --value lockttyui-tty1.service)
-    case "$current" in inactive|failed) ;; *) exit 0 ;; esac
+    case "$current" in inactive|failed) ;; *) event DASHBOARD_NOT_INACTIVE; exit 0 ;; esac
     if [ "$1" = fallback ] || [ -e "$fallback" ]; then
       native_fallback
     else
@@ -65,7 +76,7 @@ case "${1:-}" in
     ;;
   return)
     current=$("$systemctl" show -p ActiveState --value getty@tty1.service)
-    case "$current" in inactive|failed) ;; *) exit 0 ;; esac
+    case "$current" in inactive|failed) ;; *) event GETTY_NOT_INACTIVE; exit 0 ;; esac
     # systemd >=251 provides raw status to a handler of exactly one unit.
     # Missing, killed, or nonzero status is not a proven clean logout.
     if [ ! -e "$fallback" ] && [ "$current" = inactive ] &&
@@ -76,7 +87,13 @@ case "${1:-}" in
       allowed || exit 0
       rm -f "$token"
       allowed || exit 0
-      "$systemctl" --no-block start lockttyui-tty1.service
+      event DASHBOARD_START_REQUESTED
+      if "$systemctl" --no-block start lockttyui-tty1.service; then
+        event DASHBOARD_START_QUEUED
+      else
+        event DASHBOARD_START_REQUEST_FAILED
+        exit 1
+      fi
     else
       native_fallback
     fi

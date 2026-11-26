@@ -58,3 +58,16 @@ func TestJournalUnitAttribution(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestRouteEventAllowlist(t *testing.T) {
+	msg := "LOCKTTYUI_EVENT=GETTY_START_QUEUED"
+	if got := classifyRouteEvent("lockttyui-tty1-handoff.service", msg); got != "GETTY_START_QUEUED" {
+		t.Fatal(got)
+	}
+	if got := classifyRouteEvent("getty@tty1.service", msg); got != "" {
+		t.Fatal(got)
+	}
+	if got := classifyRouteEvent("lockttyui-tty1-handoff.service", msg+" secret"); got != "" {
+		t.Fatal(got)
+	}
+}
