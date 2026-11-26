@@ -135,10 +135,31 @@ A failed handoff or return oneshot now requests the existing fallback oneshot
 through systemd OnFailure. The fallback first refuses to alter routing when
 the dashboard or getty is active, starting, or otherwise not known inactive
 or failed. This check is not atomic with the later job request and cannot
-prove tty ownership. The runtime getty override permits at most three starts
-in sixty seconds before systemd rate limiting; recovery may require a manual
-reset from SSH or tty2. A failed fallback has no recursive failure handler.
+prove tty ownership. The tty1 getty retains its existing start limit; recovery may require a manual
+reset from SSH or tty2 after the limit is reached. A failed fallback has no recursive failure handler.
 The lease remains present when fallback requests getty because the getty unit
 requires it; if fallback itself fails, the marker can remain and an
 administrator must diagnose it. A successful `--no-block` enqueue still does
 not prove startup; condition skips and job failures require further work.
+
+### Router serialization and native getty limits
+
+Route invocations use an exclusive advisory flock in a 0700 directory below
+`/run`, validate ownership and mode, and wait at most three seconds. A lock
+timeout returns failure; an existing OnFailure handler may request fallback.
+The lock serializes the router only. Package lifecycle scripts and the systemd
+manager do not take it: checks against their operations remain non-atomic. The
+lock remains until the router exits, not until asynchronous jobs complete.
+
+The fallback drop-in no longer adds the 3-starts-per-60-seconds limit, which
+could stop a working getty after normal logout. It retains Restart=always and
+the tty1 drop-in's existing 10-starts-per-20-seconds policy. Those limits are
+still applied to getty starts, not independently to LockTTYUI recovery attempts.
+`reset-failed` clears the counter once per fallback invocation and is not a
+recovery-attempt budget. Thus repeated triggers and rapid successful logouts
+remain unresolved; this change does not claim independent finite recovery.
+
+Rootless Docker running `/usr/sbin/init` without privileged mode exited 255 in
+this environment, and unshare could not write uid_map. These attempts did not
+validate PID 1 unit behavior. An isolated VM or a delegated-cgroup test host is
+needed for actual systemd tests; TTY, PAM and SELinux require separate tests.

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -89,10 +90,13 @@ func TestTTY1RouteTransitions(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, directive := range []string{"OnSuccess=\n", "OnFailure=\n", "StartLimitIntervalSec=60s", "StartLimitBurst=3", "Restart=always", "RestartSec=3s"} {
+				for _, directive := range []string{"OnSuccess=\n", "OnFailure=\n", "Restart=always", "RestartSec=3s"} {
 					if !strings.Contains(string(b), directive) {
 						t.Fatalf("native fallback missing %q", directive)
 					}
+				}
+				if strings.Contains(string(b), "StartLimitIntervalSec=") || strings.Contains(string(b), "StartLimitBurst=") {
+					t.Fatal("fallback must not override getty start limits")
 				}
 				if strings.Contains(string(b), "ExecStart=") {
 					t.Fatal("fallback must not override the vendor getty command")
@@ -230,5 +234,38 @@ esac
 	}
 	if _, err = os.Stat(filepath.Join(dir, "lockttyui-tty1-fallback")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRouteLockTimeoutPreservesState(t *testing.T) {
+	original, err := os.ReadFile("packaging/lockttyui-tty1-route")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	lockdir := filepath.Join(dir, "lockttyui-private")
+	if err = os.Mkdir(lockdir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(lockdir, "route.lock"), os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	script := filepath.Join(dir, "route")
+	source := strings.Replace(string(original), "state=/run\n", "state='"+dir+"'\n", 1)
+	if err = os.WriteFile(script, []byte(source), 0700); err != nil {
+		t.Fatal(err)
+	}
+	b, err := exec.Command("/bin/sh", script, "handoff").CombinedOutput()
+	if err == nil || !strings.Contains(string(b), "ROUTE_LOCK_TIMEOUT") {
+		t.Fatalf("expected bounded lock timeout: %v %s", err, b)
+	}
+	if _, err = os.Stat(filepath.Join(dir, "lockttyui-tty1-login.ready")); !os.IsNotExist(err) {
+		t.Fatal("lock loser must not change login lease")
 	}
 }

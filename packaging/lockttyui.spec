@@ -9,6 +9,7 @@ BuildRequires:  systemd-rpm-macros
 # tty1 is the only modified getty instance; agetty remains the login handler.
 Requires:      systemd >= 252
 Requires:      /usr/sbin/agetty
+Requires:      /usr/bin/flock
 
 %global debug_package %{nil}
 
