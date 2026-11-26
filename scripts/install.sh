@@ -8,15 +8,15 @@ usage() {
   cat <<'HELP'
 LockTTYUI RPM manager (AlmaLinux 9 x86_64)
 Usage:
-  bash install.sh install [build-N]  Install/update the latest published build, or a pinned build
+  bash install.sh install [build-N]  Install/update the validated default build, or an explicit test build
   bash install.sh remove             Remove RPM and restore stock getty configuration
   bash install.sh status             Show installed package and TTY1 unit states
   bash install.sh --help
 
 Run from SSH or TTY2, not TTY1. The installer NEVER restarts a logged-in TTY1.
-After initial install, activate the dashboard on an idle TTY1 from SSH/TTY2:
-  sudo systemctl stop getty@tty1.service
-  sudo systemctl start lockttyui-tty1.service
+After initial install, reboot at a convenient time with SSH/TTY2 available.
+Default release: build-15. Explicit build-N opts into that test release.
+This helper never downgrades an installed newer RPM.
 
 The release RPM is currently unsigned. SHA-256 is checked against GitHub's
 official release-asset digest, but this does NOT provide an independent signature.
@@ -60,8 +60,8 @@ if [[ "$action" == "remove" ]]; then
 fi
 
 [[ $# -le 2 ]] || die "Usage: install [build-N]"
-requested="${2:-}"
-if [[ -n "$requested" && ! "$requested" =~ ^build-[0-9]+$ ]]; then
+requested="${2:-build-15}"
+if [[ ! "$requested" =~ ^build-[0-9]+$ ]]; then
   die "Release must look like build-13"
 fi
 for dep in curl python3 sha256sum dnf rpm; do
@@ -69,28 +69,20 @@ for dep in curl python3 sha256sum dnf rpm; do
 done
 
 echo "Checking official GitHub Releases..."
-api="https://api.github.com/repos/ARTS-Night/LockTTYUI/releases"
-if [[ -n "$requested" ]]; then
-  api="$api/tags/$requested"
-else
-  api="$api?per_page=100"
-fi
+api="https://api.github.com/repos/ARTS-Night/LockTTYUI/releases/tags/$requested"
 metadata="$(curl --fail --silent --show-error --location --retry 3 \
   --connect-timeout 10 --max-time 40 --header 'Accept: application/vnd.github+json' "$api")"
 
 # Parse with Python's standard library, not grep/sed over JSON. The official
 # repo, asset basename, URL path, build number and digest are all constrained.
-# With no tag specified, choose the highest numeric build-N (not list order).
+# Only the validated default or an explicitly requested build is eligible.
 selection="$(printf '%s' "$metadata" | python3 -c '
 import json, re, sys
 requested=sys.argv[1]
 data=json.load(sys.stdin)
 items=data if isinstance(data,list) else [data]
 items=[x for x in items if isinstance(x,dict) and not x.get("draft",True) and re.fullmatch(r"build-[0-9]+",str(x.get("tag_name","")))]
-if requested:
-    items=[x for x in items if x["tag_name"]==requested]
-else:
-    items.sort(key=lambda x:int(x["tag_name"].split("-")[1]),reverse=True)
+items=[x for x in items if x["tag_name"]==requested]
 for item in items:
     tag=item["tag_name"]
     number=tag.split("-")[1]
@@ -124,8 +116,12 @@ echo "SHA-256 verified."
 
 # A package upgrade preserves any active TTY1 login. It does not implicitly
 # restart getty, switch VTs, touch SELinux policy or change system-wide printk.
-sudo dnf install -y --nogpgcheck "$workdir/$rpm_name"
+if rpm -q lockttyui >/dev/null 2>&1; then
+  sudo dnf upgrade -y --nogpgcheck "$workdir/$rpm_name"
+else
+  sudo dnf install -y --nogpgcheck "$workdir/$rpm_name"
+fi
 rpm -q lockttyui
 echo "Done. Active TTY1 sessions were not restarted."
 echo "If TTY1 was already running, log in/out to launch the new binary."
-echo "If the dashboard has never been activated, see: bash install.sh --help"
+echo "If the dashboard has never been activated, reboot at a convenient time."

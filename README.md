@@ -5,9 +5,19 @@ Read-only Linux console telemetry dashboard. Go 1.23+, no third-party Go depende
 ## Install from GitHub Releases (AlmaLinux 9 x86_64)
 
 The RPM is distributed through GitHub Releases rather than a DNF repository.
-Use the repository's readable install helper to select the highest numbered
-published `build-N`, check the official release-asset SHA-256 digest, and
-install or upgrade the RPM without disturbing any active TTY1 session:
+The supported distribution method is a local RPM installed with DNF.
+Build-15 is the default validated release; higher build numbers are test
+candidates until explicitly promoted. Download the RPM and SHA256SUMS
+from the matching GitHub release and verify them before installation:
+
+```bash
+sha256sum -c SHA256SUMS
+sudo dnf install ./lockttyui-0.6.0-15.el9.x86_64.rpm
+```
+
+Alternatively, use the repository's readable helper to fetch the validated
+default or explicitly select a test build, verify the asset digest and
+install or upgrade without restarting a logged-in TTY1:
 
 ```bash
 curl -fL -o lockttyui-install.sh \
@@ -17,19 +27,13 @@ less lockttyui-install.sh
 bash lockttyui-install.sh install
 ```
 
-Use `bash lockttyui-install.sh install build-13` to pin a specific
-prerelease, `bash lockttyui-install.sh status` to inspect its state,
+Use `bash lockttyui-install.sh install build-16` to explicitly select a test
+build (the helper will not downgrade an installed newer version), `bash lockttyui-install.sh status` to inspect its state,
 or `bash lockttyui-install.sh remove` to uninstall. This script requires
 `curl`, `python3`, `sha256sum`, DNF and sudo. It never executes downloaded
 code as a shell script and **never restarts an active TTY1 login**.
 
-**First activation:** From SSH or TTY2, ensure nobody is logged into TTY1,
-then run:
-
-```bash
-sudo systemctl stop getty@tty1.service
-sudo systemctl start lockttyui-tty1.service
-```
+**First activation:** Reboot at a convenient time with SSH or TTY2 available. The RPM does not stop an existing login to take over TTY1.
 
 Ctrl+] opens the standard login. After logout, the dashboard returns.
 An upgrade of an already-running dashboard takes effect the next time it
