@@ -93,3 +93,18 @@ Development branch: responsive dashboard and separate TTY1 display/getty service
 ## Resource bounds
 
 Three single-entry graph caches, 60 samples per series and six events; caches are replaced on history changes and terminal resize. Hardware collection has one in-flight worker. No persistent monitoring database or cron job is installed. The RPM installs a TTY1-only getty drop-in, a display service and three small routing services and a disabled tty9 preview unit; it never restarts an active login session during package installation. The preview service's memory and task limits are provisional and need measurement on real hardware.
+
+## TTY1 diagnostics
+
+Run `sudo lockttyui report` from SSH and share the output after reviewing it.
+The report collects bounded service status and classified journal events; it
+excludes raw logs, usernames and input. `RETURN_MONITOR_MISSING` means the
+router did not receive all monitor fields; it does not establish why. A
+queued job is not proof of a running service, and TTY1 session occupancy and
+SELinux audit denials are not determined by this report. See
+[operations](packaging/OPERATIONS.md) for recovery from SSH or tty2.
+
+The Linux packages workflow can run on a PR targeting `build` without
+publishing. Successful jobs upload artifacts accessible through the Actions
+run; they are test packages, not public release URLs. Publication remains
+limited to a successful push to `build`.

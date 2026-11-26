@@ -2,10 +2,13 @@ name: Linux packages
 on:
   push:
     branches: [build]
+  workflow_dispatch:
+  pull_request:
+    branches: [build]
 permissions:
   contents: read
 concurrency:
-  group: lockttyui-build
+  group: lockttyui-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   rpm:
@@ -188,6 +191,7 @@ jobs:
           retention-days: 14
 
   publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/build'
     needs: [rpm, deb]
     runs-on: ubuntu-24.04
     permissions:

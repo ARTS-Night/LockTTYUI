@@ -79,3 +79,16 @@ func TestTTY1RouteTransitions(t *testing.T) {
         })
     }
 }
+
+func TestReturnLogsMissingMonitorWithoutPrivateValues(t *testing.T) {
+    original,err:=os.ReadFile("packaging/lockttyui-tty1-route");if err!=nil{t.Fatal(err)}
+    dir:=t.TempDir();fake:=filepath.Join(dir,"systemctl");script:=filepath.Join(dir,"route")
+    fixture:="#!/bin/sh\ncase \"$1\" in is-system-running) echo running;; show) echo inactive;; daemon-reload|reset-failed|--no-block) exit 0;; *) exit 9;; esac\n"
+    if err=os.WriteFile(fake,[]byte(fixture),0700);err!=nil{t.Fatal(err)}
+    source:=strings.Replace(string(original),"state=/run\n","state='"+dir+"'\n",1);source=strings.Replace(source,"systemctl=/usr/bin/systemctl\n","systemctl='"+fake+"'\n",1)
+    if err=os.WriteFile(script,[]byte(source),0700);err!=nil{t.Fatal(err)}
+    cmd:=exec.Command("/bin/sh",script,"return");cmd.Env=[]string{"MONITOR_UNIT=getty@tty1.service","MONITOR_SERVICE_RESULT=success","MONITOR_EXIT_CODE=exited","MONITOR_EXIT_STATUS="}
+    out,err:=cmd.CombinedOutput();if err!=nil{t.Fatalf("%v: %s",err,out)}
+    if !strings.Contains(string(out),"LOCKTTYUI_EVENT=RETURN_MONITOR_MISSING"){t.Fatalf("missing reason: %s",out)}
+    if _,err=os.Stat(filepath.Join(dir,"lockttyui-tty1-fallback"));err!=nil{t.Fatal(err)}
+}
