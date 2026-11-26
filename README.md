@@ -88,7 +88,20 @@ See packaging/OPERATIONS.md for automatic TTY1 integration, install/uninstall ro
 
 ## Status
 
-Development branch: responsive dashboard and separate TTY1 display/getty services. Automated RPM tests cannot prove physical console handoff or SELinux enforcing user-shell transitions; validate each target in a test VM before production deployment.
+### Validation status (2026-11-26)
+
+| Target | Package CI (build 20) | Console login/logout |
+| --- | --- | --- |
+| AlmaLinux 9.9 (systemd 252) | Passed | One successful TTY1 round trip in a VM |
+| AlmaLinux 10 | Passed | Fix awaiting console retest |
+| Debian 12 | Passed | Not yet verified in a VM |
+| Debian 13 | Passed | Not yet verified in a VM |
+
+Build 20 ([5748f93](https://github.com/ARTS-Night/LockTTYUI/commit/5748f93c40ef143ba3589b0fa00f30ecb1ba2ac4), [CI run](https://github.com/ARTS-Night/LockTTYUI/actions/runs/45804154531)) fixes the logout-return regression reproduced in build 19. It is a test candidate on `finish-build18`, not a published GitHub Release. Repeated logout, fault recovery, live removal, and SELinux audit validation remain pending.
+
+The regression occurred because getty's `OnSuccess` and `OnFailure` both targeted the same return handler. Systemd could omit `MONITOR_*` when selecting the trigger, causing a clean logout to enter the native getty fallback. The fix uses distinct existing handlers for success and failure, preserving the strict exit-status checks and stock authentication. Do not combine these handlers again. See [operations](packaging/OPERATIONS.md) for the routing details.
+
+Automated package tests do not prove live console ownership, PAM or SELinux transitions. Test on the target OS before production deployment.
 
 ## Resource bounds
 
@@ -99,8 +112,11 @@ Three single-entry graph caches, 60 samples per series and six events; caches ar
 Run `sudo lockttyui report` from SSH and share the output after reviewing it.
 The report collects bounded service status and classified journal events; it
 excludes raw logs, usernames and input. `RETURN_MONITOR_MISSING` means the
-router did not receive all monitor fields; it does not establish why. A
-queued job is not proof of a running service, and TTY1 session occupancy and
+router did not receive all monitor fields; it does not establish why by itself.
+After a successful logout, look for `RETURN_CLEAN`, `DASHBOARD_START_QUEUED`,
+and a subsequent dashboard `started` event, with the dashboard active, getty
+inactive, and fallback marker absent. A queued job alone is not proof of a
+running service. TTY1 session occupancy and
 SELinux audit denials are not determined by this report. See
 [operations](packaging/OPERATIONS.md) for recovery from SSH or tty2.
 
