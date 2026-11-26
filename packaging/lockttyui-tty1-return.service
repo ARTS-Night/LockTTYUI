@@ -2,6 +2,7 @@
 Description=Return tty1 from stock login to dashboard or fallback
 After=getty@tty1.service
 ConditionPathExists=!/run/lockttyui-tty1-removing
+OnFailure=lockttyui-tty1-fallback.service
 StartLimitIntervalSec=0
 
 [Service]

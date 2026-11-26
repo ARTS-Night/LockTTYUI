@@ -32,6 +32,10 @@ func TestTTY1RouteTransitions(t *testing.T) {
 		{"ignored-kill", "return", "inactive", "inactive", "running", "success", "killed", "KILL", true, false, false, true, true, true, "getty@tty1.service"},
 		{"getty-failed", "return", "inactive", "failed", "running", "exit-code", "exited", "1", true, false, false, true, true, true, "getty@tty1.service"},
 		{"unknown-status", "return", "inactive", "inactive", "running", "", "", "", true, false, false, true, true, true, "getty@tty1.service"},
+		{"fallback-live-getty", "fallback", "failed", "active", "running", "", "", "", false, false, false, false, false, false, ""},
+		{"fallback-getty-starting", "fallback", "failed", "activating", "running", "", "", "", false, false, false, false, false, false, ""},
+		{"fallback-getty-unknown", "fallback", "failed", "unknown", "running", "", "", "", false, false, false, false, false, false, ""},
+		{"unknown-manager", "handoff", "inactive", "inactive", "unknown", "", "", "", false, false, false, false, false, false, ""},
 		{"crash-fallback", "fallback", "failed", "inactive", "running", "", "", "", false, false, false, true, true, true, "getty@tty1.service"},
 		{"fallback-logout", "return", "failed", "inactive", "running", "success", "exited", "0", true, true, false, true, true, true, "getty@tty1.service"},
 		{"erase-handoff", "handoff", "inactive", "inactive", "running", "", "", "", false, false, true, false, false, false, ""},
@@ -85,7 +89,7 @@ func TestTTY1RouteTransitions(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, directive := range []string{"OnSuccess=\n", "OnFailure=\n", "StartLimitIntervalSec=0", "Restart=always", "RestartSec=3s"} {
+				for _, directive := range []string{"OnSuccess=\n", "OnFailure=\n", "StartLimitIntervalSec=60s", "StartLimitBurst=3", "Restart=always", "RestartSec=3s"} {
 					if !strings.Contains(string(b), directive) {
 						t.Fatalf("native fallback missing %q", directive)
 					}
@@ -132,5 +136,99 @@ func TestRouteReportsRejectedStart(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "LOCKTTYUI_EVENT=GETTY_START_REQUEST_FAILED") || strings.Contains(string(out), "LOCKTTYUI_EVENT=GETTY_START_QUEUED") {
 		t.Fatalf("incorrect events: %s", out)
+	}
+}
+
+// This models the OnFailure dispatch explicitly; it does not emulate systemd.
+func TestRejectedHandoffThenFallback(t *testing.T) {
+	original, err := os.ReadFile("packaging/lockttyui-tty1-route")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "systemctl")
+	script := filepath.Join(dir, "route")
+	trace := filepath.Join(dir, "trace")
+	fixture := `#!/bin/sh
+case "$1" in
+ is-system-running) echo running ;;
+ show) echo inactive ;;
+ daemon-reload|reset-failed) exit 0 ;;
+ --no-block) if [ ! -e "$MOCK_TRACE" ]; then : > "$MOCK_TRACE"; exit 1; fi; exit 0 ;;
+ *) exit 9 ;;
+esac
+`
+	if err = os.WriteFile(fake, []byte(fixture), 0700); err != nil {
+		t.Fatal(err)
+	}
+	source := strings.Replace(string(original), "state=/run\n", "state='"+dir+"'\n", 1)
+	source = strings.Replace(source, "systemctl=/usr/bin/systemctl\n", "systemctl='"+fake+"'\n", 1)
+	if err = os.WriteFile(script, []byte(source), 0700); err != nil {
+		t.Fatal(err)
+	}
+	run := func(action string) error {
+		cmd := exec.Command("/bin/sh", script, action)
+		cmd.Env = append(os.Environ(), "MOCK_TRACE="+trace)
+		return cmd.Run()
+	}
+	if err = run("handoff"); err == nil {
+		t.Fatal("first request unexpectedly succeeded")
+	}
+	if err = run("fallback"); err != nil {
+		t.Fatalf("fallback request failed: %v", err)
+	}
+	for _, path := range []string{"lockttyui-tty1-login.ready", "lockttyui-tty1-fallback", "systemd/system/getty@tty1.service.d/90-lockttyui-fallback.conf"} {
+		if _, err = os.Stat(filepath.Join(dir, path)); err != nil {
+			t.Fatalf("missing %s: %v", path, err)
+		}
+	}
+}
+
+func TestRejectedDashboardThenFallback(t *testing.T) {
+	original, err := os.ReadFile("packaging/lockttyui-tty1-route")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "systemctl")
+	script := filepath.Join(dir, "route")
+	trace := filepath.Join(dir, "trace")
+	fixture := `#!/bin/sh
+case "$1" in
+ is-system-running) echo running ;;
+ show) echo inactive ;;
+ daemon-reload|reset-failed) exit 0 ;;
+ --no-block) if [ ! -e "$MOCK_TRACE" ]; then : > "$MOCK_TRACE"; exit 1; fi; exit 0 ;;
+ *) exit 9 ;;
+esac
+`
+	if err = os.WriteFile(fake, []byte(fixture), 0700); err != nil {
+		t.Fatal(err)
+	}
+	source := strings.Replace(string(original), "state=/run\n", "state='"+dir+"'\n", 1)
+	source = strings.Replace(source, "systemctl=/usr/bin/systemctl\n", "systemctl='"+fake+"'\n", 1)
+	if err = os.WriteFile(script, []byte(source), 0700); err != nil {
+		t.Fatal(err)
+	}
+	token := filepath.Join(dir, "lockttyui-tty1-login.ready")
+	if err = os.WriteFile(token, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	run := func(action string) error {
+		cmd := exec.Command("/bin/sh", script, action)
+		cmd.Env = append(os.Environ(), "MOCK_TRACE="+trace, "MONITOR_UNIT=getty@tty1.service", "MONITOR_SERVICE_RESULT=success", "MONITOR_EXIT_CODE=exited", "MONITOR_EXIT_STATUS=0")
+		return cmd.Run()
+	}
+	if err = run("return"); err == nil {
+		t.Fatal("dashboard request unexpectedly succeeded")
+	}
+	if err = run("fallback"); err != nil {
+		t.Fatalf("fallback request failed: %v", err)
+	}
+	if _, err = os.Stat(token); err != nil {
+		t.Fatalf("fallback must restore login lease: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(dir, "lockttyui-tty1-fallback")); err != nil {
+		t.Fatal(err)
 	}
 }

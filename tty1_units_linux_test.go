@@ -65,6 +65,8 @@ func TestTTY1DashboardUnprivilegedAndSingleConsole(t *testing.T){
 func TestTTY1HandoffGatesGettyStart(t *testing.T){
     p:=unitDirectives(t,"packaging/lockttyui-tty1-handoff.service")
     expectUnitValue(t,p,"Type","oneshot")
+    expectUnitValue(t,p,"OnFailure","lockttyui-tty1-fallback.service")
+    expectUnitValue(t,unitDirectives(t,"packaging/lockttyui-tty1-return.service"),"OnFailure","lockttyui-tty1-fallback.service")
     expectUnitValue(t,p,"ExecStart","/usr/libexec/lockttyui-tty1-route handoff")
     for _,action:=range []string{"handoff","return","fallback"}{
         p:=unitDirectives(t,"packaging/lockttyui-tty1-"+action+".service")

@@ -2,6 +2,7 @@
 Description=Start stock tty1 getty after LockTTYUI exits
 After=lockttyui-tty1.service
 ConditionPathExists=!/run/lockttyui-tty1-removing
+OnFailure=lockttyui-tty1-fallback.service
 StartLimitIntervalSec=0
 
 [Service]

@@ -128,3 +128,17 @@ container without release stripping. It is one measurement, not an installed
 package size or RSS measurement. Targets remain <5 MiB binary, <=10 MiB RSS,
 <=1% of one CPU on average, zero new resident daemons and no VT-x/AMD-V
 requirement; RSS, PSS, CPU, TUI subprocesses and long-term usage remain unmeasured.
+
+### Failure handler change
+
+A failed handoff or return oneshot now requests the existing fallback oneshot
+through systemd OnFailure. The fallback first refuses to alter routing when
+the dashboard or getty is active, starting, or otherwise not known inactive
+or failed. This check is not atomic with the later job request and cannot
+prove tty ownership. The runtime getty override permits at most three starts
+in sixty seconds before systemd rate limiting; recovery may require a manual
+reset from SSH or tty2. A failed fallback has no recursive failure handler.
+The lease remains present when fallback requests getty because the getty unit
+requires it; if fallback itself fails, the marker can remain and an
+administrator must diagnose it. A successful `--no-block` enqueue still does
+not prove startup; condition skips and job failures require further work.

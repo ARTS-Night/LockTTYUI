@@ -17,7 +17,7 @@ dropin="$dropdir/90-lockttyui-fallback.conf"
 allowed() {
   [ ! -e "$removing" ] || return 1
   phase=$("$systemctl" is-system-running 2>/dev/null || :)
-  case "$phase" in stopping|offline) return 1 ;; esac
+  case "$phase" in running|degraded|starting) ;; *) return 1 ;; esac
   return 0
 }
 
@@ -36,6 +36,13 @@ start_getty() {
 
 native_fallback() {
   allowed || return 0
+  # Never change routing while getty may be serving a session or starting.
+  current_getty=$("$systemctl" show -p ActiveState --value getty@tty1.service) || return 1
+  case "$current_getty" in
+    inactive|failed) ;;
+    *) event GETTY_NOT_INACTIVE; return 0 ;;
+  esac
+  allowed || return 0
   event FALLBACK_SELECTED
   : > "$fallback"
   : > "$token"
@@ -48,7 +55,8 @@ native_fallback() {
 [Unit]
 OnSuccess=
 OnFailure=
-StartLimitIntervalSec=0
+StartLimitIntervalSec=60s
+StartLimitBurst=3
 
 [Service]
 Restart=always
