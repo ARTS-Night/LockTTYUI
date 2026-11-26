@@ -93,3 +93,12 @@ Development branch: responsive dashboard and separate TTY1 display/getty service
 ## Resource bounds
 
 Three single-entry graph caches, 60 samples per series and six events; caches are replaced on history changes and terminal resize. Hardware collection has one in-flight worker. No persistent monitoring database or cron job is installed. The RPM installs a TTY1-only getty drop-in, a display service and three small routing services and a disabled tty9 preview unit; it never restarts an active login session during package installation. The preview service's memory and task limits are provisional and need measurement on real hardware.
+
+## Diagnostic reports
+
+From SSH, run `sudo lockttyui report` before and immediately after reproducing
+an issue. `sudo lockttyui report --full` scans more journal entries, and
+`sudo lockttyui report --json` emits structured JSON. The report is read-only
+and omits raw journal messages and arbitrary unit configuration to reduce
+sensitive data exposure. Review the report before sharing. A missing or unknown
+result does not prove that a service, session, or SELinux denial is absent.

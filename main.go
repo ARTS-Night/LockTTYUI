@@ -252,4 +252,4 @@ func run()error{
   }
  }
 }
-func main(){if e:=run();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}}
+func main(){if handled,err:=diagnosticCLI(os.Args[1:]);handled{if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)};return};if e:=run();e!=nil{fmt.Fprintln(os.Stderr,e);os.Exit(1)}}
