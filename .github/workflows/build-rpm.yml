@@ -2,10 +2,12 @@ name: Linux packages
 on:
   push:
     branches: [build]
+  pull_request:
+    branches: [build]
 permissions:
   contents: read
 concurrency:
-  group: lockttyui-build
+  group: lockttyui-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   rpm:
@@ -46,7 +48,7 @@ jobs:
           fi
       - name: Clean DNF install, reinstall, upgrade and removal test
         run: |
-          docker run --rm -v "$PWD/dist:/packages:ro" -v "$PWD/previous:/previous:ro" -v "$PWD:/src:ro" almalinux:${{ matrix.el }} bash -euxc '
+          docker run --rm -e EXPECTED_BUILD="$GITHUB_RUN_NUMBER" -e EXPECTED_COMMIT="$GITHUB_SHA" -v "$PWD/dist:/packages:ro" -v "$PWD/previous:/previous:ro" -v "$PWD:/src:ro" almalinux:${{ matrix.el }} bash -euxc '
             dnf -y install systemd /usr/sbin/agetty python3
             # AlmaLinux 9 contains curl-minimal; installing full curl conflicts.
             command -v curl
@@ -90,6 +92,11 @@ jobs:
             test ! -e /etc/systemd/system/getty.target.wants/lockttyui-preview.service
             if rpm -q golang; then exit 1; fi
             /usr/bin/lockttyui --glyph-test
+            /usr/bin/lockttyui --version | grep -F "build $EXPECTED_BUILD, commit $EXPECTED_COMMIT"
+            /usr/bin/lockttyui status
+            /usr/bin/lockttyui doctor
+            /usr/bin/lockttyui report --full
+            /usr/bin/lockttyui report --json | python3 -m json.tool > /dev/null
             # Reinstall exercises RPM lifecycle scripts without starting/stopping
             # a live getty (the container has no running systemd manager).
             dnf -y --nogpgcheck reinstall /packages/lockttyui-*.rpm
@@ -179,7 +186,7 @@ jobs:
           if readelf -d lockttyui | grep -q NEEDED; then exit 1; fi
       - name: APT install, reinstall, remove and purge
         run: |
-          docker run --rm -v "$PWD/dist:/packages:ro" -v "$PWD/packaging:/packaging:ro" "debian:${{ matrix.version }}" bash -euxc 'bash /packaging/test-deb.sh'
+          docker run --rm -e EXPECTED_BUILD="$GITHUB_RUN_NUMBER" -e EXPECTED_COMMIT="$GITHUB_SHA" -v "$PWD/dist:/packages:ro" -v "$PWD/packaging:/packaging:ro" "debian:${{ matrix.version }}" bash -euxc 'bash /packaging/test-deb.sh'
       - uses: actions/upload-artifact@v4
         with:
           name: lockttyui-deb${{ matrix.version }}-amd64
@@ -188,6 +195,7 @@ jobs:
           retention-days: 14
 
   publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/build'
     needs: [rpm, deb]
     runs-on: ubuntu-24.04
     permissions:

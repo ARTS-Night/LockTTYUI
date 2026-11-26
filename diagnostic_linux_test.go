@@ -49,3 +49,12 @@ func TestDiagnosticRedaction(t *testing.T) {
 		t.Fatalf("unexpected log output: %q", got)
 	}
 }
+
+func TestJournalUnitAttribution(t *testing.T) {
+	if got := journalUnit("1", "init.scope", "", "getty@tty1.service"); got != "getty@tty1.service" {
+		t.Fatal(got)
+	}
+	if got := journalUnit("123", "other.service", "getty@tty1.service", "getty@tty1.service"); got != "other.service" {
+		t.Fatal(got)
+	}
+}

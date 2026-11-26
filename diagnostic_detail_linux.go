@@ -138,7 +138,7 @@ func collectDetails(full bool) detailReport {
 	if full {
 		lines = "500"
 	}
-	args := []string{"--no-pager", "--boot=0", "--output=json", "--lines=" + lines, "--quiet"}
+	args := []string{"--no-pager", "--boot=0", "--output=json", "--output-fields=MESSAGE,_PID,_SYSTEMD_UNIT,OBJECT_SYSTEMD_UNIT,UNIT", "--lines=" + lines, "--quiet"}
 	for _, n := range names {
 		args = append(args, "--unit="+n)
 	}
@@ -160,11 +160,7 @@ func collectDetails(full bool) detailReport {
 			if json.Unmarshal(line, &e) != nil {
 				continue
 			}
-			if e.PID == "1" && e.ManagerUnit != "" {
-				e.Unit = e.ManagerUnit
-			} else if e.ObjectUnit != "" {
-				e.Unit = e.ObjectUnit
-			}
+			e.Unit = journalUnit(e.PID, e.Unit, e.ObjectUnit, e.ManagerUnit)
 			known := false
 			for _, n := range names {
 				if e.Unit == n {
@@ -256,6 +252,19 @@ func pathState(path string) string {
 		return "PERMISSION_DENIED"
 	}
 	return "UNKNOWN"
+}
+
+// Only PID 1 may attribute its messages to another unit via journal fields.
+func journalUnit(pid, unit, object, manager string) string {
+	if pid == "1" {
+		if manager != "" {
+			return manager
+		}
+		if object != "" {
+			return object
+		}
+	}
+	return unit
 }
 func classifyJournal(s string) string {
 	s = strings.ToLower(s)

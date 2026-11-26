@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends systemd systemd-sysv util-linux login
+apt-get install -y --no-install-recommends systemd systemd-sysv util-linux login python3
 unitdir=/lib/systemd/system
 if [ ! -f "$unitdir/getty@.service" ]; then unitdir=/usr/lib/systemd/system; fi
 stock=$(sha256sum "$unitdir/getty@.service")
@@ -21,6 +21,11 @@ test ! -e "$unitdir/getty@tty2.service.d/50-lockttyui.conf"
 test ! -e /etc/systemd/system/getty@tty1.service.d/50-lockttyui.conf
 systemd-analyze --man=no verify getty@tty1.service lockttyui-tty1.service lockttyui-tty1-handoff.service lockttyui-tty1-return.service lockttyui-tty1-fallback.service
 /usr/bin/lockttyui --glyph-test
+/usr/bin/lockttyui --version | grep -F "build $EXPECTED_BUILD, commit $EXPECTED_COMMIT"
+/usr/bin/lockttyui status
+/usr/bin/lockttyui doctor
+/usr/bin/lockttyui report --full
+/usr/bin/lockttyui report --json | python3 -m json.tool >/dev/null
 apt-get install -y --reinstall --no-install-recommends "$pkg"
 dpkg -V lockttyui
 apt-get remove -y lockttyui
