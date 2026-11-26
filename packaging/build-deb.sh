@@ -12,6 +12,7 @@ version=$(awk '/^Version:/{print $2;exit}' packaging/lockttyui.spec)
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 2
 version="$version-$2+deb$1"
 root=$(mktemp -d)
+chmod 0755 "$root"
 trap 'rm -rf "$root"' EXIT
 mkdir -p "$root/DEBIAN" "$4"
 cat > "$root/DEBIAN/control" <<EOF
