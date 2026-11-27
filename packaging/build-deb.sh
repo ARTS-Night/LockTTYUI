@@ -1,5 +1,7 @@
 #!/bin/bash
 set -Eeuo pipefail
+# Ensure package files and the control directory have conventional permissions.
+umask 022
 # Run from repository root with a tested static Linux amd64 binary.
 [[ $# = 4 ]] || { echo "usage: build-deb.sh 12|13 BUILD BINARY OUTPUT_DIR" >&2; exit 2; }
 case "$1" in

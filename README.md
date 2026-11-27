@@ -1,95 +1,337 @@
 # LockTTYUI
 
-Read-only Linux console telemetry dashboard. Go 1.23+, no third-party Go dependencies.
+**Your Linux server, at a glance — before you log in.**
 
-## Install from GitHub Releases
+A lightweight, read-only system telemetry dashboard for the Linux text console.
+LockTTYUI turns TTY1 into a live status display while keeping the distribution's
+normal login, PAM and security policies in place.
 
-Multi-distribution release candidates target AlmaLinux 9/10 (x86_64)
-and Debian 12/13 (amd64), using systemd >= 252 on a text-console server.
-Select the matching OS version; never install a package for another OS.
+[![Linux packages](https://github.com/ARTS-Night/LockTTYUI/actions/workflows/build-rpm.yml/badge.svg?branch=finish-build18)](https://github.com/ARTS-Night/LockTTYUI/actions/workflows/build-rpm.yml)
+[![Go](https://img.shields.io/badge/Go-1.23%2B-00ADD8?logo=go)](https://go.dev/)
+![Platform](https://img.shields.io/badge/Linux-x86__64-555555?logo=linux)
+![Status](https://img.shields.io/badge/Status-Release%20candidate-555555)
 
-| OS | Package filename (N is the build number) |
+[Installation](#installation) · [Usage](#usage) · [Diagnostics](#diagnostics) · [Compatibility](#compatibility) · [Build from source](#build-from-source)
+
+## Features
+
+- **Live system overview:** CPU and per-core activity, RAM, swap, storage, disk I/O, network traffic, uptime and available hardware metrics.
+- **Console-first design:** responsive monochrome layout, 60-second graphs, activity indicators and an ASCII fallback.
+- **Normal Linux login:** press Ctrl+] to open the stock login prompt; a confirmed clean logout returns to the dashboard.
+- **Lightweight by design:** one dashboard process, bounded history, cached graphs and no third-party Go dependencies. Routing helpers run only during transitions.
+- **TTY1 only:** SSH, other virtual terminals and distribution authentication are left unchanged.
+- **Easy maintenance:** native RPM and DEB packages, with an SSH-friendly diagnostic report in the current release candidate.
+
+> [!NOTE]
+> LockTTYUI is a **pre-login dashboard**, not a session locker. Running it
+> inside an existing shell does not lock that session or provide authentication.
+
+## Usage
+
+```text
+Boot
+  |
+  v
+LockTTYUI dashboard
+  |  Ctrl+]
+  v
+Standard Linux login (agetty / login / PAM)
+  |
+  v
+User shell
+  |  exit
+  v
+LockTTYUI dashboard
+```
+
+| Action | Result |
 | --- | --- |
-| AlmaLinux 9 | lockttyui-0.6.0-N.el9.x86_64.rpm |
-| AlmaLinux 10 | lockttyui-0.6.0-N.el10.x86_64.rpm |
-| Debian 12 | lockttyui_0.6.0-N+deb12_amd64.deb |
-| Debian 13 | lockttyui_0.6.0-N+deb13_amd64.deb |
+| Boot the server | Display the dashboard on TTY1 |
+| Ctrl + ] | Hand off to the normal login prompt |
+| Log in | Use the normal Linux shell |
+| `exit` on TTY1 | Return to the dashboard after a confirmed clean logout |
+| Connect using SSH | Continue using SSH normally, independently of TTY1 |
 
-Download the matching package and SHA256SUMS from the same release.
-Verify the selected file against its checksum (when only one package
-is downloaded, use `sha256sum --ignore-missing -c SHA256SUMS` and verify
-the exact package filename is reported OK). Install a local RPM with
-`sudo dnf install ./filename.rpm` or a local DEB with
-`sudo apt install ./filename.deb`. Remove using the corresponding package manager.
-The new OS targets remain test candidates until VM console validation.
-Graphical display-manager systems and non-systemd init are out of scope.
-The optional installer helper currently supports only AlmaLinux 9.
+If a handoff fails or a clean exit cannot be confirmed, the intended fallback is
+the distribution's standard getty until the next boot. A failed dashboard must
+not become an alternative authentication mechanism.
 
-### Validated AlmaLinux 9 release
+## Compatibility
 
-The RPM is distributed through GitHub Releases rather than a DNF repository.
-The supported distribution method is a local RPM installed with DNF.
-Build-15 is the default validated release; higher build numbers are test
-candidates until explicitly promoted. Download the RPM and SHA256SUMS
-from the matching GitHub release and verify them before installation:
+Requires an x86_64/amd64 Linux text-console server with systemd 252 or later.
+A graphical display manager or a non-systemd init is outside the current scope.
+
+| Distribution | Package | Build 20 package CI | Build 20 console test |
+| --- | --- | --- | --- |
+| AlmaLinux 9 | RPM | Passed | One successful login/logout on 9.9 (systemd 252) |
+| AlmaLinux 10 | RPM | Passed | Retest pending |
+| Debian 12 | DEB | Passed | Pending |
+| Debian 13 | DEB | Passed | Pending |
+
+**Validation record:** November 26, 2026 — [build 20 source](https://github.com/ARTS-Night/LockTTYUI/commit/5748f93c40ef143ba3589b0fa00f30ecb1ba2ac4) · [CI results](https://github.com/ARTS-Night/LockTTYUI/actions/runs/45804154531) · [test PR #2](https://github.com/ARTS-Night/LockTTYUI/pull/2).
+
+Build 20 is a test candidate, **not a published GitHub Release**.
+Package CI is not proof of live console ownership, PAM or SELinux/AppArmor
+behavior. Repeated logout, fault recovery and live removal tests remain pending.
+
+## Installation
+
+> [!IMPORTANT]
+> Use SSH or TTY2 for installation and removal, and keep that recovery path
+> available. Test in a VM before using a production server. Packages are
+> currently unsigned; checksums from the same repository verify integrity,
+> not independent publisher authentication.
+
+### 1. Choose the package
+
+Visit [GitHub Releases](https://github.com/ARTS-Night/LockTTYUI/releases).
+Select a matching OS package and its release's `SHA256SUMS`.
+Here, `N` denotes the actual release build number.
+
+| Distribution | Package filename |
+| --- | --- |
+| AlmaLinux 9 | `lockttyui-0.6.0-N.el9.x86_64.rpm` |
+| AlmaLinux 10 | `lockttyui-0.6.0-N.el10.x86_64.rpm` |
+| Debian 12 | `lockttyui_0.6.0-N+deb12_amd64.deb` |
+| Debian 13 | `lockttyui_0.6.0-N+deb13_amd64.deb` |
+
+The AlmaLinux 9 installer helper still defaults to build 15, the previously
+validated release. Builds 18 and 19 have a known logout-return regression;
+the build 20 fix is currently available from the test branch and CI artifacts,
+not as a release download. Do not assume the newest published package includes
+the fix.
+
+### 2. Verify and install
+
+In the download directory:
 
 ```bash
-sha256sum -c SHA256SUMS
-sudo dnf install ./lockttyui-0.6.0-15.el9.x86_64.rpm
+sha256sum --ignore-missing -c SHA256SUMS
 ```
 
-Alternatively, use the repository's readable helper to fetch the validated
-default or explicitly select a test build, verify the asset digest and
-install or upgrade without restarting a logged-in TTY1:
+Confirm that your exact package filename is reported as `OK` before continuing.
+Replace the example filename below with the package you downloaded.
+
+**AlmaLinux**
 
 ```bash
-curl -fL -o lockttyui-install.sh \
-  https://raw.githubusercontent.com/ARTS-Night/LockTTYUI/main/scripts/install.sh
-# Inspect the script before running it.
-less lockttyui-install.sh
-bash lockttyui-install.sh install
+sudo dnf install ./filename.rpm
 ```
 
-Use `bash lockttyui-install.sh install build-16` to explicitly select a test
-build (the helper will not downgrade an installed newer version), `bash lockttyui-install.sh status` to inspect its state,
-or `bash lockttyui-install.sh remove` to uninstall. This script requires
-`curl`, `python3`, `sha256sum`, DNF and sudo. It never executes downloaded
-code as a shell script and **never restarts an active TTY1 login**.
+**Debian**
 
-**First activation:** Reboot at a convenient time with SSH or TTY2 available.
-The RPM does not stop an existing login to take over TTY1.
+```bash
+sudo apt install ./filename.deb
+```
 
-Ctrl+] opens the standard login. After logout, the dashboard returns.
-An upgrade of an already-running dashboard takes effect the next time it
-restarts (normally after a login/logout cycle).
+### 3. Activate
 
-**Security limitation:** The release RPM is currently unsigned. An SHA-256
-digest fetched from the same trusted GitHub repository verifies download
-integrity but does **not** constitute independent publisher authentication.
-Review the release URL and script before executing. Test with an SSH/TTY2
-recovery path available; production stability requires further distro/VM testing.
+```bash
+sudo reboot
+```
 
-## Build and run
+Reboot at a suitable time. No manual `systemctl enable` is required.
+Installation does not intentionally stop an existing TTY1 login.
+After an upgrade, the running dashboard picks up the new binary when
+restarted; reboot clears any boot-local fallback state.
 
-    go test ./...
-    go vet ./...
-    go build -o lockttyui .
-    ./lockttyui --exhibit
+<details>
+<summary>Optional release installer — AlmaLinux 9 only</summary>
 
-The dashboard uses a modern monochrome palette: black console background, white headings and graphs, grey frames and secondary data, and restrained green/red status indicators. No blue, cyan, magenta or yellow theme colors. Ctrl+] exits exhibit mode. Use --ascii for font compatibility, --glyph-test to inspect supported glyphs, --interval and --sample to tune the default 50ms display / 250ms sampling cadence. History uses one-second averages over 60 seconds; memory history retains the percentage of capacity observed at each sample even if VM memory size changes. CPU and memory panels balance graph heights against each other in side-by-side layouts, so memory's paging detail does not leave unused blank space beneath the CPU chart. At idle a subtle grey 50% guide shows the CPU graph scale without implying CPU activity.
+The helper downloads a specific published RPM, checks its GitHub asset digest,
+and uses DNF. It does not downgrade a newer installed version.
 
-CPU, memory, swap, local storage, disk I/O, network, and optional hardware statistics are displayed subject to available screen space. NETWORK shows DOWNLOAD (RX) and UPLOAD (TX); STORAGE shows READ and WRITE. The MEMORY I/O section displays /proc/vmstat pgpgin/pgpgout in bytes/sec and swap page-in/page-out in bytes/sec. These are paging/storage-backed events, **not DRAM bandwidth**. Green signals inbound/read activity; red signals outbound/write activity; idle is grey and missing data is ?. A 900ms pulse hold prevents distracting flicker. The small icons update on the existing metric timer, not an additional render loop. On Linux virtual consoles, external kernel printk messages can overwrite terminal cells even when LockTTYUI has not changed. The renderer therefore performs an in-place full repaint every 750ms to repair console interference, while retaining low-overhead delta updates between repairs. It does not change the system-wide kernel console log level; exceptionally frequent console messages can still be briefly visible. Optional NVIDIA metrics use /usr/bin/nvidia-smi with a timeout; Docker counts are visible populated systemd cgroup scopes, not an authoritative container inventory.
+```bash
+git clone https://github.com/ARTS-Night/LockTTYUI.git
+cd LockTTYUI
+git checkout build-15
+less scripts/install.sh
+bash scripts/install.sh install
+```
 
-## Safety
+Use `bash scripts/install.sh status`, `bash scripts/install.sh remove`, or
+`bash scripts/install.sh install build-N` to explicitly select a published
+test release. Requires curl, Python 3, sha256sum, sudo and DNF.
+The helper does not install unpublished PR artifacts.
 
-Standalone exhibit mode is not a session lock. It returns to the invoking shell. The packages provide a **TTY1-only** pre-login dashboard in its own unprivileged systemd service: Ctrl+] stops the dashboard, then systemd launches the unmodified distro agetty in its normal SELinux context. On successful logout, systemd starts the dashboard again. A dashboard or getty failure falls back to stock getty until the next boot, with native 3-second retries and no routing loop. Only a confirmed clean exit restores the dashboard. A login lease is retained throughout the getty lifecycle, and the display never forcibly hangs up an occupied terminal. TTY2+ and SSH use unmodified standard login. No PAM changes, no Docker socket, no identity/address disclosure. The dashboard service runs as user nobody; SELinux Enforcing login/logout behavior and physical console handoff require VM validation.
+</details>
 
-See packaging/OPERATIONS.md for automatic TTY1 integration, install/uninstall rollback, exact VM test steps and manual isolated tty9 preview. The preview is not a login replacement. PrivateNetwork can make preview network rates unavailable.
+## Diagnostics
 
-## Status
+From SSH or TTY2, on build 19 or later containing the diagnostic CLI:
 
-Development branch: responsive dashboard and separate TTY1 display/getty services. Automated RPM tests cannot prove physical console handoff or SELinux enforcing user-shell transitions; validate each target in a test VM before production deployment.
+```bash
+sudo lockttyui report
+```
 
-## Resource bounds
+The report includes package and OS information, effective unit states,
+handoff/fallback markers and classified journal events. Raw journal messages,
+command lines, session identities and input are excluded. Review the output
+before sharing it in a [GitHub issue](https://github.com/ARTS-Night/LockTTYUI/issues).
 
-Three single-entry graph caches, 60 samples per series and six events; caches are replaced on history changes and terminal resize. Hardware collection has one in-flight worker. No persistent monitoring database or cron job is installed. The RPM installs a TTY1-only getty drop-in, a display service and three small routing services and a disabled tty9 preview unit; it never restarts an active login session during package installation. The preview service's memory and task limits are provisional and need measurement on real hardware.
+A healthy logout in build 20 looks like this (abridged from the AlmaLinux 9 VM test):
+
+```text
+lockttyui-tty1-return.service RETURN_CLEAN
+lockttyui-tty1-return.service DASHBOARD_START_QUEUED
+lockttyui-tty1.service started
+
+lockttyui-tty1.service: state=active result=success restart=no
+getty@tty1.service: state=inactive result=success restart=no
+Handoff token: absent
+Fallback marker: absent
+Runtime fallback override: absent
+```
+
+A queued start alone is not proof of a running dashboard. The report does not
+establish TTY1 session occupancy or SELinux audit results; `UNKNOWN` indicates
+an unverified check, not necessarily an error.
+
+Additional commands:
+
+```bash
+lockttyui --version
+lockttyui status
+sudo lockttyui doctor
+sudo lockttyui report --json
+```
+
+For older releases without this CLI, see [operations and troubleshooting](packaging/OPERATIONS.md).
+
+## Uninstall and recover
+
+Run from SSH or TTY2, preferably with no active TTY1 login.
+
+```bash
+# AlmaLinux
+sudo dnf remove lockttyui
+
+# Debian (instead)
+sudo apt remove lockttyui
+```
+
+The package removal restores the stock TTY1 configuration. If the standard
+login does not return after successful removal, run:
+
+```bash
+sudo systemctl daemon-reload &&
+sudo systemctl start getty@tty1.service
+```
+
+Do not forcibly stop a logged-in getty or disable SELinux, AppArmor or PAM.
+See [operations](packaging/OPERATIONS.md) for detailed recovery procedures.
+
+## Build from source
+
+Requires Go 1.23+ and Git. The following runs a standalone preview in your
+current terminal without installing system services.
+
+```bash
+git clone --branch finish-build18 https://github.com/ARTS-Night/LockTTYUI.git
+cd LockTTYUI
+go test ./...
+go vet ./...
+go build -trimpath -o lockttyui .
+./lockttyui --exhibit
+```
+
+Ctrl+] exits the preview back to the shell. This is not a session lock.
+
+| Option | Purpose |
+| --- | --- |
+| `--ascii` | ASCII fallback for limited console fonts |
+| `--glyph-test` | Inspect supported characters |
+| `--interval 100ms` | Set the display refresh interval (default 50ms) |
+| `--sample 500ms` | Set the metric sampling interval (default 250ms) |
+
+<details>
+<summary>Build the test RPM locally — AlmaLinux 9 / 10</summary>
+
+From SSH or TTY2 on the matching AlmaLinux version, in the cloned repository:
+
+```bash
+sudo dnf install -y golang rpm-build systemd-rpm-macros binutils git
+git checkout --detach 5748f93c40ef143ba3589b0fa00f30ecb1ba2ac4
+TOP=$(mktemp -d)
+mkdir -p "$TOP"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+git archive --format=tar.gz --prefix=lockttyui-0.6.0/ HEAD \
+  > "$TOP/SOURCES/lockttyui-0.6.0.tar.gz"
+rpmbuild -bb --define "_topdir $TOP" --define "build_release 20" \
+  packaging/lockttyui.spec
+ls "$TOP"/RPMS/x86_64/
+```
+
+If the build succeeds, install the matching RPM from that directory using
+DNF, as above. Reboot and test on a disposable VM. This is the same source
+revision as the successful build 20 package CI, not a signed release.
+
+</details>
+
+For DEB packaging, see [build-deb.sh](packaging/build-deb.sh) and the
+[Linux packages workflow](.github/workflows/build-rpm.yml).
+
+## Design and safety
+
+- The dashboard runs as an unprivileged account (`nobody`, using its primary group), with no added capabilities.
+- Systemd starts the original distribution `getty@tty1.service`; LockTTYUI never handles passwords or replaces PAM.
+- A TTY1-specific login token coordinates the display and getty. The dashboard uses `tty-fail` instead of forcibly taking an occupied console.
+- The handoff, return and fallback helpers are one-shot services, not resident daemons.
+- No Docker socket access, persistent monitoring database or cron job is required.
+- No deliberate change to SSH, TTY2+, the kernel console log level or distribution authentication policy.
+
+<details>
+<summary>Telemetry and resource details</summary>
+
+The dashboard uses white and grey text/graphs with restrained green/red status
+indicators. History uses one-second averages over 60 seconds; RAM/swap samples
+retain the capacity percentages observed at the time of sampling. A subtle
+50% CPU graph guide is a scale reference, not activity.
+
+NETWORK displays RX/download and TX/upload. STORAGE displays read and write.
+MEMORY I/O uses `/proc/vmstat` paging and swap counters, not DRAM bandwidth.
+Green denotes inbound/read activity; red denotes outbound/write activity.
+Idle is grey and unavailable data is `?`. A 900ms pulse hold reduces flicker.
+
+Three single-entry graph caches, bounded history and a single in-flight
+hardware worker keep resource use bounded by the displayed metrics and
+terminal geometry. Rendering uses delta updates and a full repaint every
+750ms to repair console interference from kernel printk. No host-wide printk
+suppression is applied. Optional NVIDIA metrics use `nvidia-smi` with a timeout.
+Docker counts describe visible populated systemd cgroup scopes, not an
+authoritative container inventory. The optional tty9 preview can have network
+rates unavailable due to PrivateNetwork. Resource limits are provisional;
+CPU and memory performance targets have not been measured on all targets.
+
+</details>
+
+<details>
+<summary>Build 20: logout regression and why the handlers must remain separate</summary>
+
+In builds 18–19, getty's `OnSuccess` and `OnFailure` both targeted the same
+return service. Systemd 252/257 can count these as two triggering candidates
+and omit `MONITOR_*`. The strict return check then selects fallback even on a
+clean logout (`RETURN_MONITOR_MISSING`).
+
+[Commit 5748f93](https://github.com/ARTS-Night/LockTTYUI/commit/5748f93c40ef143ba3589b0fa00f30ecb1ba2ac4)
+separates the existing success and failure handlers, preserving the strict
+exit-status check. Do not combine them again. Missing or inconsistent
+monitor information still selects fallback; stale service properties are not
+used as a substitute for the triggering exit status.
+
+The AlmaLinux 9 VM reproduced the problem in build 19 and recorded
+`RETURN_CLEAN` and a running dashboard after logout with build 20.
+See [operations](packaging/OPERATIONS.md) for the technical details.
+
+</details>
+
+## Project status
+
+Development is focused on console compatibility, reliable logout recovery and
+documentation rather than additional resident services. Pull requests targeting
+`build` run package CI without publishing; successful pushes to `build` may
+publish unsigned prerelease packages.
+
+- [Releases](https://github.com/ARTS-Night/LockTTYUI/releases)
+- [Operations and troubleshooting](packaging/OPERATIONS.md)
+- [Roadmap](ROADMAP.md)
+- [Report an issue](https://github.com/ARTS-Night/LockTTYUI/issues)

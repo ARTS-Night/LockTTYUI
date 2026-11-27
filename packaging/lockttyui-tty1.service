@@ -15,7 +15,7 @@ StartLimitBurst=10
 [Service]
 Type=exec
 User=nobody
-Group=nobody
+# Use the account primary group (nogroup on Debian, nobody on EL).
 NoNewPrivileges=yes
 CapabilityBoundingSet=
 ProtectHome=yes

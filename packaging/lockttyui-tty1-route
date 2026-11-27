@@ -2,6 +2,8 @@
 # Only root-owned systemd units call this helper. Never execute agetty here.
 set -eu
 umask 077
+
+event() { printf "LOCKTTYUI_EVENT=%s\n" "$1" >&2; }
 state=/run
 systemctl=/usr/bin/systemctl
 token="$state/lockttyui-tty1-login.ready"
@@ -26,6 +28,11 @@ start_getty() {
 
 native_fallback() {
   allowed || return 0
+  # Do not reconfigure routing while getty may own tty1 or be starting.
+  getty_state=$("$systemctl" show -p ActiveState --value getty@tty1.service) || return 1
+  case "$getty_state" in inactive|failed) ;; *) event GETTY_NOT_INACTIVE; return 0 ;; esac
+  allowed || return 0
+  event FALLBACK_SELECTED
   : > "$fallback"
   : > "$token"
   # Native restart, not a loop of OnSuccess/OnFailure callbacks. Only tty1
@@ -65,7 +72,7 @@ case "${1:-}" in
     ;;
   return)
     current=$("$systemctl" show -p ActiveState --value getty@tty1.service)
-    case "$current" in inactive|failed) ;; *) exit 0 ;; esac
+    case "$current" in inactive|failed) ;; *) event GETTY_NOT_INACTIVE; exit 0 ;; esac
     # systemd >=251 provides raw status to a handler of exactly one unit.
     # Missing, killed, or nonzero status is not a proven clean logout.
     if [ ! -e "$fallback" ] && [ "$current" = inactive ] &&
@@ -74,10 +81,24 @@ case "${1:-}" in
        [ "${MONITOR_EXIT_CODE:-}" = exited ] &&
        [ "${MONITOR_EXIT_STATUS:-}" = 0 ]; then
       allowed || exit 0
+      event RETURN_CLEAN
       rm -f "$token"
       allowed || exit 0
-      "$systemctl" --no-block start lockttyui-tty1.service
+      if "$systemctl" --no-block start lockttyui-tty1.service; then
+        event DASHBOARD_START_QUEUED
+      else
+        event DASHBOARD_START_REQUEST_FAILED
+        exit 1
+      fi
     else
+      if [ -e "$fallback" ]; then event RETURN_FALLBACK_ALREADY_ACTIVE
+      elif [ "$current" != inactive ]; then event RETURN_GETTY_FAILED
+      elif [ -z "${MONITOR_UNIT:-}" ] || [ -z "${MONITOR_SERVICE_RESULT:-}" ] || [ -z "${MONITOR_EXIT_CODE:-}" ] || [ -z "${MONITOR_EXIT_STATUS:-}" ]; then event RETURN_MONITOR_MISSING
+      elif [ "${MONITOR_UNIT:-}" != getty@tty1.service ]; then event RETURN_MONITOR_UNIT_MISMATCH
+      elif [ "${MONITOR_SERVICE_RESULT:-}" != success ]; then event RETURN_SERVICE_RESULT_NOT_SUCCESS
+      elif [ "${MONITOR_EXIT_CODE:-}" != exited ]; then event RETURN_EXIT_NOT_NORMAL
+      else event RETURN_EXIT_NONZERO
+      fi
       native_fallback
     fi
     ;;
